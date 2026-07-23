@@ -1,99 +1,132 @@
-# 🛡️ APKGuard AI v2.0
-**Generative AI-Based Automated Analysis and Risk Scoring of Fraudulent APKs**
+# APKGuard — Industrial Android APK Security Triage Platform
 
-![Open Source](https://img.shields.io/badge/Open%20Source-100%25-green)
-![Python](https://img.shields.io/badge/Backend-Python%20FastAPI-blue)
-![React](https://img.shields.io/badge/Frontend-React%20%2B%20Vite-cyan)
-![AI](https://img.shields.io/badge/AI%20Engine-LLaMA%203.3%2070B-orange)
-![ML](https://img.shields.io/badge/ML%20Engine-scikit--learn-yellow)
+APKGuard is an evidence-driven Android APK security triage project. It is being rebuilt from a prototype into an industrial-grade platform for static inspection, optional runtime analysis, threat-intelligence enrichment, explainable scoring, and analyst reporting.
 
-> **PSB CyberShield Hackathon 2026** | **Bank of India × IIT Hyderabad**  
-> **Problem Statement 1:** Fraudulent APK Analysis & Risk Scoring  
-> **Team:** null Pointers  
+> Current branch status: **Sprint 0 industrial baseline**. This is not yet a production malware sandbox or enterprise SOC product. The project now avoids known false claims and clearly separates observed evidence from inferred indicators.
 
----
+## What APKGuard is building
 
-<img width="1442" height="2200" alt="image" src="https://github.com/user-attachments/assets/04377b3d-5204-4274-a970-eefb8a7c7cd9" />
+APKGuard is designed to help analysts answer:
 
+- What permissions, components, APIs, URLs, certificates, and risky indicators exist inside an APK?
+- Which findings are directly detected, which are inferred, and which are externally sourced?
+- Does reputation intelligence already know the APK hash or related indicators?
+- Did real runtime instrumentation observe suspicious behaviour?
+- Why did the platform assign a particular risk score?
+- What should a security analyst verify next?
 
----
+## Sprint 0 truth policy
 
-## 🚀 Executive Summary
+APKGuard now follows these baseline rules:
 
-A large portion of banking fraud in India begins with fake Android apps distributed via WhatsApp or SMS. **APKGuard AI** is a full-stack, enterprise-ready web platform that allows SOC analysts to upload suspicious APKs and receive a complete forensic threat report in under 30 seconds. 
+1. **No fabricated runtime evidence.** Dynamic analysis is marked as `not_executed` unless real runtime instrumentation captures events.
+2. **No automatic APK upload to VirusTotal.** VirusTotal integration is hash-only by default.
+3. **AI is optional and advisory.** AI summaries explain deterministic evidence; they do not create the final verdict.
+4. **ML is advisory until validated.** The current K-Means demo is labelled as a synthetic feature-vector experiment, not a real-world malware benchmark.
+5. **Frontend claims must match backend behaviour.** Unsupported claims such as enterprise-ready, zero-day detection, fixed scan time, and no storage have been removed.
 
-By combining static bytecode analysis, live runtime instrumentation, generative AI interpretation, and ML-based clustering, APKGuard AI neutralizes zero-day banking trojans before they impact customers.
+## Current capabilities
 
-### 🏆 KPI Benchmarks
-* **72** AV Engines Scanned
-* **200+** Security Checks Run
-* **<30s** Average Scan Time
-* **96.4%** F1 Score (ML Classifier)
+- FastAPI backend for APK scan orchestration.
+- React + Vite frontend dashboard.
+- Androguard-based static APK parsing.
+- Dangerous permission analysis.
+- Suspicious API and string extraction.
+- URL and IP extraction.
+- Obfuscation and native-library indicators.
+- Static behavioural inference with evidence labels.
+- Hash-only VirusTotal lookup when configured.
+- Optional Groq AI evidence summary when configured.
+- Optional Frida runtime capture when a compatible Android runtime is already available.
+- PDF report generation prototype.
+- URL scanner prototype.
+- Synthetic ML demonstration with clear validation warning.
 
----
+## Planned industrial architecture
 
-## 🔥 v2.0 Major Improvements
+```text
+Frontend Analyst Dashboard
+        |
+        v
+Secure API Gateway
+        |
+        v
+Scan Orchestrator + Job Queue
+        |
+        +--> Static Analyzer Worker
+        +--> Threat Intelligence Worker
+        +--> Dynamic Android Sandbox Worker
+        +--> Optional AI Summary Worker
+        +--> Report Worker
+        |
+        v
+Evidence Store + Scoring Engine + Reports + SIEM Integrations
+```
 
-This repository represents **v2.0**, introducing six major enterprise-grade capabilities:
+## Setup
 
-1. **Decoupled Scoring Engine:** Static and dynamic scores use mutually exclusive data sources (Androguard + Frida) combined via a weighted average formula to prevent indicator double-counting.
-2. **K-Means ML Clustering:** A 5-feature vector classified using K-Means (k=2), achieving 96% accuracy across a 50-sample holdout dataset (Confusion Matrix live in dashboard).
-3. **LLM Smali Deobfuscation:** Extracts raw Smali bytecode from crypto/network methods and uses **Groq LLaMA 3.3 70B** to translate it into readable Python pseudocode with MITRE technique mapping.
-4. **Zero-Day Logic Gate:** Automatically flags `POSSIBLE ZERO-DAY` payloads that evade all 72 VirusTotal engines but score ≥ 60 on our internal behavioral engine.
-5. **One-Click YARA Export:** Generates deployment-ready `.yar` rules client-side (<5ms) compatible with CrowdStrike, Wazuh, and Velociraptor.
-6. **WhatsApp/SMS URL Scanner:** Direct mitigation for the primary delivery vector, scoring phishing URLs against suspicious TLDs, brand impersonation patterns, and the OpenPhish feed.
+### Backend
 
----
-
-## 🛠️ Technology Stack
-
-| Layer | Component | Technology |
-| :--- | :--- | :--- |
-| **Frontend** | Security Dashboard | React + Vite |
-| **Backend API** | Analysis Orchestration | Python FastAPI |
-| **AI Engine** | Threat Narrative & Smali | Groq LLaMA 3.3 70B |
-| **Static Analysis** | APK Decompilation | Androguard |
-| **Dynamic Analysis** | Runtime Instrumentation | Frida 17.x |
-| **ML Classifier** | K-Means Clustering | scikit-learn |
-| **Reporting** | PDF Generation | reportlab |
-
----
-
-## ⚙️ Local Setup & Installation
-
-To run APKGuard AI locally, you will need to start both the Python backend and the React frontend.
-
-### 1. Backend Setup (FastAPI)
 ```bash
-# Clone the repository
-git clone [https://github.com/POTHAMM/APKGuard-Ai.git](https://github.com/POTHAMM/APKGuard-Ai.git)
-cd APKGuard-Ai/backend
-
-# Create a virtual environment
+cd backend
 python -m venv venv
-source venv/bin/activate  # On Windows use: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate    # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Add your API Keys (Groq, VirusTotal) to an environment file
 cp .env.example .env
-
-# Start the FastAPI server
 uvicorn main:app --reload --port 8000
+```
 
-### 2. Frontend Setup (React + Vite)
-Open a **new** terminal window:
+The backend works without Groq or VirusTotal keys. Without keys, those modules report disabled/unavailable states instead of failing the application.
+
+### Frontend
+
 ```bash
-cd ../frontend
+cd frontend
 npm install
+cp .env.example .env
 npm run dev
+```
 
-👥 The Team (null Pointers)
-Prathamkumar Kalidas Solanki - Computer Science & Engineering, Karnavati University
+## Important environment variables
 
-Vatsa Jamar - Vellore Institute of Technology
+| Variable | Purpose | Default |
+|---|---|---|
+| `GROQ_API_KEY` | Enables optional AI explanation | Empty / disabled |
+| `VT_API_KEY` | Enables VirusTotal hash lookup | Empty / disabled |
+| `APKGUARD_ALLOW_VT_UPLOAD` | Future cloud-enrichment upload gate | `false` |
+| `APKGUARD_ENABLE_CACHE` | Local result cache | `true` |
+| `APKGUARD_ENABLE_HISTORY` | Local scan history | `true` |
+| `APKGUARD_MAX_UPLOAD_MB` | Upload size limit | `100` |
+| `APKGUARD_CORS_ORIGINS` | Allowed frontend origins | Local Vite origins |
+| `VITE_API_URL` | Frontend backend URL | `http://localhost:8000` |
 
-Anusha Lodha - Parul Institute of Engineering and Technology
+## Verification
 
-Disclaimer: This tool is intended for authorized malware analysis, incident response triage, and educational purposes only.
+```bash
+python -m py_compile backend/*.py
+cd frontend
+npm run lint
+npm run build
+```
+
+## Known limitations
+
+- The dynamic sandbox is not yet a complete isolated Android emulator pipeline.
+- The ML benchmark is synthetic and not a real-world malware evaluation.
+- The report endpoint still accepts client-supplied data in Sprint 0.
+- Authentication, RBAC, audit logging, database persistence, and job queues are planned for later sprints.
+- Advanced static-analysis modules such as certificate analysis, exported-component analysis, taint analysis, and repackaging comparison are planned but not complete.
+
+## Roadmap
+
+1. **Sprint 0:** Truth, safety, dependency setup, and baseline verification.
+2. **Sprint 1:** Typed backend schemas, modular architecture, tests, and job model.
+3. **Sprint 2:** Advanced static-analysis checks and standards mapping.
+4. **Sprint 3:** Real dynamic Android sandbox and runtime timeline.
+5. **Sprint 4:** Threat-intelligence correlation, similarity graph, and repackaging detection.
+6. **Sprint 5:** Reproducible ML dataset and ablation study.
+7. **Sprint 6:** Enterprise workflow, reports from immutable scan IDs, SIEM/STIX integrations, Docker and CI/CD.
+
+## Ethical use
+
+APKGuard is intended for authorized mobile-security testing, incident response, education, and defensive malware triage. Do not use it to analyze, distribute, execute, or modify malware outside a controlled and authorized environment.

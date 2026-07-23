@@ -1,4 +1,6 @@
-import os, requests, logging
+import os
+import requests
+import logging
 from datetime import datetime
 
 log = logging.getLogger("apkguard.siem")

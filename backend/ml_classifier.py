@@ -98,14 +98,12 @@ def kmeans_classify(analysis: dict) -> dict:
     """
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
-    import numpy as np
 
     # Build training data
     malware_features = [normalize(f, MAX_VALS) for f in KNOWN_MALWARE]
     benign_features = [normalize(f, MAX_VALS) for f in KNOWN_BENIGN]
     
     X = np.array(malware_features + benign_features)
-    labels = [1]*len(malware_features) + [0]*len(benign_features)  # 1=malware, 0=benign
 
     # Train K-Means with 2 clusters
     scaler = StandardScaler()

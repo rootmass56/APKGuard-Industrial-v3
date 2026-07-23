@@ -1,0 +1,3 @@
+-r requirements.txt
+# Optional evidence-explanation provider. Deterministic findings remain authoritative.
+groq>=0.11,<1.0

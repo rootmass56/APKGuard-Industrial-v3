@@ -8,12 +8,12 @@ import {
 } from "lucide-react";
 import "./index.css";
 
-const API = "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
 const sev = (s) => { s = (s||"").toUpperCase(); const m = { CRITICAL:{color:"var(--c-critical)",icon:AlertOctagon,label:"CRITICAL"}, HIGH:{color:"var(--c-high)",icon:AlertTriangle,label:"HIGH"}, MEDIUM:{color:"var(--c-medium)",icon:Info,label:"MEDIUM"}, LOW:{color:"var(--c-low)",icon:CheckCircle,label:"LOW"}, INFO:{color:"var(--c-info)",icon:Info,label:"INFO"} }; return m[s]||m.INFO; };
 const mitreColor=(t)=>({"Initial Access":"#ef4444","Execution":"#f97316","Persistence":"#f59e0b","Privilege Escalation":"#eab308","Defense Evasion":"#84cc16","Credential Access":"#22c55e","Discovery":"#06b6d4","Lateral Movement":"#3b82f6","Collection":"#8b5cf6","Exfiltration":"#ec4899","Command and Control":"#dc2626","Impact":"#991b1b"})[t]||"#6b7280";
 const gaugeColor=(s)=>s>=80?"#ef4444":s>=60?"#f97316":s>=40?"#f59e0b":s>=20?"#84cc16":"#22c55e";
 const gaugeLabel=(s)=>s>=80?"CRITICAL":s>=60?"HIGH":s>=40?"MEDIUM":s>=20?"LOW":"SAFE";
-const STAGES=[{icon:Package,label:"Unpacking APK",dur:600},{icon:FileText,label:"Parsing Manifest",dur:600},{icon:Search,label:"Static Analysis",dur:800},{icon:Lock,label:"Permission Audit",dur:500},{icon:Globe,label:"VirusTotal Lookup",dur:2000},{icon:Cpu,label:"AI Threat Analysis",dur:3000},{icon:Eye,label:"MITRE ATT&CK Mapping",dur:600},{icon:BarChart2,label:"Generating Risk Score",dur:400}];
+const STAGES=[{icon:Package,label:"Uploading APK"},{icon:Search,label:"Server analysis running"},{icon:Lock,label:"Evidence review"},{icon:BarChart2,label:"Finalizing result"}];
 const DANGEROUS=["CAMERA","RECORD_AUDIO","READ_CONTACTS","ACCESS_FINE_LOCATION","READ_SMS","PROCESS_OUTGOING_CALLS","SEND_SMS","READ_CALL_LOG","READ_PHONE_STATE","REQUEST_INSTALL_PACKAGES"];
 
 function UploadPage({onResults}){
@@ -28,20 +28,20 @@ function UploadPage({onResults}){
   const onDrop=useCallback((e)=>{e.preventDefault();setDragging(false);handleFile(e.dataTransfer.files[0]);},[]);
   const analyze=async()=>{
     if(!file)return;
-    setStatus("scanning");setStageIdx(0);setProgress(0);
-    const total=STAGES.reduce((a,s)=>a+s.dur,0);let cum=0;
-    for(let i=0;i<STAGES.length;i++){setStageIdx(i);await new Promise(r=>setTimeout(r,STAGES[i].dur));cum+=STAGES[i].dur;setProgress(Math.round((cum/total)*90));}
+    setStatus("scanning");setStageIdx(0);setProgress(10);
     const form=new FormData();form.append("file",file);
     try{
+      setStageIdx(1);setProgress(35);
       const res=await fetch(`${API}/analyze`,{method:"POST",body:form});
-      setProgress(100);
-      if(!res.ok){const e=await res.json();throw new Error(e.detail||"Analysis failed");}
+      setStageIdx(2);setProgress(75);
+      if(!res.ok){const e=await res.json().catch(()=>({detail:"Analysis failed"}));throw new Error(e.detail||"Analysis failed");}
       const data=await res.json();
-      setTimeout(()=>onResults(data),400);
+      setStageIdx(3);setProgress(100);
+      setTimeout(()=>onResults(data),250);
     }catch(e){setStatus("error");setErrMsg(e.message);}
   };
-  const FEATURES=[[Search,"Static Analysis","DEX, manifest, resources"],[Cpu,"AI Threat Intel","LLaMA 3.3 70B via Groq"],[Eye,"MITRE ATT&CK","Mobile technique mapping"],[Globe,"VirusTotal","72-engine hash lookup"],[Lock,"Permission Audit","Dangerous perm detection"],[BarChart2,"Risk Scoring","0-100 weighted score"]];
-  const STATS=[["72","AV Engines"],["200+","Checks Run"],["~30s","AVG SCAN"],["100%","Open Source"]];
+  const FEATURES=[[Search,"Static Analysis","DEX, manifest, resources"],[Cpu,"Optional AI Summary","Disabled unless configured"],[Eye,"MITRE ATT&CK","Evidence-based mapping"],[Globe,"Hash Reputation","No file upload by default"],[Lock,"Permission Audit","Dangerous perm detection"],[BarChart2,"Risk Scoring","Explainable weighted score"]];
+  const STATS=[["Evidence","Based"],["Hash-only","VT Mode"],["AI","Optional"],["Open","Source"]];
   return(
     <div className="upload-root">
       <div className="grid-bg" aria-hidden/><div className="scanline" aria-hidden/>
@@ -71,7 +71,7 @@ function UploadPage({onResults}){
         {status==="error"&&<div className="upload-err"><AlertTriangle size={14}/> {errMsg}</div>}
         {file&&status==="idle"&&<button className="analyze-btn" onClick={analyze}><Zap size={16}/>Run Security Analysis</button>}
         <div className="features-grid">{FEATURES.map(([Icon,title,desc])=><div key={title} className="feature-card"><div className="feature-icon"><Icon size={16}/></div><div><div className="feature-title">{title}</div><div className="feature-desc">{desc}</div></div></div>)}</div>
-        <p className="upload-footer">Files analyzed locally | No data stored | 100% Open source</p>
+        <p className="upload-footer">Local static analysis by default | External lookups are configurable | Results may be cached locally</p>
       </div>
     </div>
   );
@@ -80,14 +80,16 @@ function UploadPage({onResults}){
 function VTBadge({vt, score}){
   if(!vt)return null;
   const detected=vt.detected??0,total=vt.total??0;
-  const pending=vt.pending,notFound=vt.not_found&&total===0;
-  const zeroDay = detected === 0 && total > 0 && !pending && !notFound && score >= 60;
-  const color = pending || notFound ? "var(--fg-dim)" : zeroDay ? "var(--c-critical)" : detected === 0 ? "var(--c-low)" : detected <= 5 ? "var(--c-medium)" : detected <= 20 ? "var(--c-high)" : "var(--c-critical)";
-  const label = pending ? "Analysis pending..." : notFound ? "Not in VT database" : zeroDay ? `0/${total} — Possible Zero-Day` : detected === 0 ? "Clean — 0 detections" : `${detected}/${total} engines detected`;
+  const unavailable=!vt.available || vt.status==="disabled" || vt.status==="error";
+  const pending=vt.pending;
+  const notFound=vt.not_found&&total===0;
+  const highInternalNoDetections = detected === 0 && total > 0 && !pending && !notFound && !unavailable && score >= 60;
+  const color = unavailable || pending || notFound ? "var(--fg-dim)" : highInternalNoDetections ? "var(--c-high)" : detected === 0 ? "var(--c-low)" : detected <= 5 ? "var(--c-medium)" : detected <= 20 ? "var(--c-high)" : "var(--c-critical)";
+  const label = unavailable ? `VT ${vt.status||"unavailable"}` : pending ? "Analysis pending..." : notFound ? "Hash not found — file not uploaded" : highInternalNoDetections ? `0/${total} — High internal risk` : detected === 0 ? `0/${total} detections` : `${detected}/${total} engines detected`;
   return(<div className="vt-badge" style={{borderColor:`${color}44`,background:`${color}11`}}>
     <Globe size={14} color={color}/>
-    <span style={{color,fontSize:11,fontWeight:700}}>{label}</span>
-    {vt.sha256&&!pending&&<a href={`https://www.virustotal.com/gui/file/${vt.sha256}`} target="_blank" rel="noreferrer" className="vt-link">View</a>}
+    <span style={{color,fontSize:11,fontWeight:700}} title={vt.reason||""}>{label}</span>
+    {vt.sha256&&!pending&&vt.available&&<a href={`https://www.virustotal.com/gui/file/${vt.sha256}`} target="_blank" rel="noreferrer" className="vt-link">View</a>}
   </div>);
 }
 
@@ -168,11 +170,11 @@ function BehavioralPanel({behavioral}){
   );
 }
 
-function ScanHistoryPanel({onSelectScan}){
+function ScanHistoryPanel(){
   const [history,setHistory]=React.useState([]);
   const [loading,setLoading]=React.useState(true);
   React.useEffect(()=>{
-    fetch('http://localhost:8000/history')
+    fetch(`${API}/history`)
       .then(r=>r.json())
       .then(d=>{ setHistory(d.scans||[]); setLoading(false); })
       .catch(()=>setLoading(false));
@@ -332,11 +334,6 @@ function DynamicPanel({dynamic}){
   );
 }
 
-function ThreatBadge({level}){
-  const colors={critical:"var(--c-critical)",high:"var(--c-high)",medium:"var(--c-medium)",low:"var(--c-low)",unknown:"var(--fg-dim)"};
-  const color=colors[level?.toLowerCase()]??"var(--fg-dim)";
-  return <span style={{fontSize:10,padding:"2px 8px",borderRadius:4,background:color+"22",color,border:`1px solid ${color}44`,textTransform:"uppercase",fontWeight:700}}>{level??'unknown'}</span>;
-}
 
 function ConfusionMatrixPanel(){
   const [data,setData]=React.useState(null);
@@ -345,14 +342,15 @@ function ConfusionMatrixPanel(){
   const load=async()=>{
     setLoading(true);
     try{
-      const r=await fetch('http://localhost:8000/batch-results');
+      const r=await fetch(`${API}/batch-results`);
       const j=await r.json();
       setData(j);
     }catch(e){console.error(e);}
     setLoading(false);
   };
 
-  React.useEffect(()=>{load();},[]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  React.useEffect(()=>{void load();},[]);
 
   if(loading) return <div className="card" style={{textAlign:"center",padding:32,color:"var(--fg-dim)"}}>Running batch test...</div>;
   if(!data) return null;
@@ -433,9 +431,6 @@ function ResultsDashboard({data,onReset}){
   const staticScore=data.static_score??score;
   const dynamicScore=data.dynamic_score??0;
   const scoringMode=data.scoring_mode??"static_only";
-  const dynamicBreakdown=data.dynamic_breakdown??[];
-  const smaliAnalysis=data.smali_analysis??{};
-  const smaliMethods=smaliAnalysis.methods??[];
   const threatIntel=data.threat_intel??null;
   const counts=findings.reduce((acc,f)=>{const raw=(f.severity||"low");const k=raw.toLowerCase();acc[k]=(acc[k]||0)+1;return acc;},{});
 
@@ -530,7 +525,7 @@ function URLScanner(){
     if(!msg.trim())return;
     setLoading(true);setResult(null);
     try{
-      const res=await fetch("http://localhost:8000/scan-url",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:msg})});
+      const res=await fetch(`${API}/scan-url`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:msg})});
       setResult(await res.json());
     }catch(e){setResult({error:e.message});}
     setLoading(false);

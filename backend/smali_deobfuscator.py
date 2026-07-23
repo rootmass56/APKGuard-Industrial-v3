@@ -151,7 +151,6 @@ def run_smali_deobfuscation(apk_path: str) -> dict:
 
 
 if __name__ == "__main__":
-    import json
     result = run_smali_deobfuscation('/home/pratham/apkguard/samples/meterpreter.apk')
     print(f"Methods found: {result['method_count']}")
     for m in result['methods']:

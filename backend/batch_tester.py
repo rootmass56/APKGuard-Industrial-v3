@@ -4,7 +4,7 @@ Synthetic 50-sample batch test for ML classifier validation.
 Generates confusion matrix from feature vectors derived from real malware families.
 """
 import numpy as np
-from ml_classifier import kmeans_classify, extract_features, normalize, MAX_VALS, KNOWN_MALWARE, KNOWN_BENIGN
+from ml_classifier import normalize, MAX_VALS, KNOWN_MALWARE, KNOWN_BENIGN
 
 # Synthetic dataset — 50 samples derived from real malware family characteristics
 # Features: [dangerous_perms, suspicious_apis, network_indicators, obfuscation_score, banking_indicators]
@@ -67,65 +67,70 @@ SYNTHETIC_DATASET = [
 ]
 
 def run_batch_test() -> dict:
-    """Run batch test and return confusion matrix."""
+    """Run the legacy synthetic batch test and return a confusion matrix.
+
+    This is intentionally labelled as synthetic. It is useful only for checking the
+    K-Means feature-vector demonstration code; it is not evidence of real-world APK
+    malware detection performance.
+    """
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
 
-    # Build training data
     malware_features = [normalize(f, MAX_VALS) for f in KNOWN_MALWARE]
     benign_features = [normalize(f, MAX_VALS) for f in KNOWN_BENIGN]
-    X_train = np.array(malware_features + benign_features)
+    x_train = np.array(malware_features + benign_features)
 
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X_train)
+    x_scaled = scaler.fit_transform(x_train)
     kmeans = KMeans(n_clusters=2, random_state=42, n_init=10)
-    kmeans.fit(X_scaled)
+    kmeans.fit(x_scaled)
 
-    # Determine malware cluster
     cluster_labels = kmeans.labels_
     malware_cluster = round(sum(cluster_labels[:len(malware_features)]) / len(malware_features))
 
-    TP = TN = FP = FN = 0
+    tp = tn = fp = fn = 0
     results = []
     false_negatives = []
     false_positives = []
-
     extraction_failures = []
+
     for features, true_label, name in SYNTHETIC_DATASET:
         try:
             norm_f = normalize(features, MAX_VALS)
-        apk_scaled = scaler.transform([norm_f])
-        cluster = kmeans.predict(apk_scaled)[0]
-        distances = kmeans.transform(apk_scaled)[0]
-        dist_mal = distances[malware_cluster]
-        dist_ben = distances[1 - malware_cluster]
-        total = dist_mal + dist_ben
-        confidence = round((1 - dist_mal/total)*100) if total > 0 else 50
-        predicted_malware = (cluster == malware_cluster)
-        predicted_label = 1 if predicted_malware else 0
+            apk_scaled = scaler.transform([norm_f])
+            cluster = kmeans.predict(apk_scaled)[0]
+            distances = kmeans.transform(apk_scaled)[0]
+            dist_mal = distances[malware_cluster]
+            dist_ben = distances[1 - malware_cluster]
+            total_distance = dist_mal + dist_ben
+            confidence = round((1 - dist_mal / total_distance) * 100) if total_distance > 0 else 50
+            predicted_malware = cluster == malware_cluster
+            predicted_label = 1 if predicted_malware else 0
 
-        if true_label == 1 and predicted_label == 1:
-            TP += 1
-        elif true_label == 0 and predicted_label == 0:
-            TN += 1
-        elif true_label == 0 and predicted_label == 1:
-            FP += 1
-            false_positives.append(name)
-        else:
-            FN += 1
-            false_negatives.append(name)
+            if true_label == 1 and predicted_label == 1:
+                tp += 1
+            elif true_label == 0 and predicted_label == 0:
+                tn += 1
+            elif true_label == 0 and predicted_label == 1:
+                fp += 1
+                false_positives.append(name)
+            else:
+                fn += 1
+                false_negatives.append(name)
 
             results.append({
                 "name": name,
                 "true_label": "malware" if true_label else "benign",
                 "predicted": "malware" if predicted_label else "benign",
                 "correct": true_label == predicted_label,
-                "confidence": confidence
+                "confidence": confidence,
             })
-        except Exception as e:
-            # Heavily packed or corrupted APK — flag as suspicious
+        except Exception as exc:
             extraction_failures.append(name)
-            TP += 1 if true_label == 1 else 0
+            if true_label == 1:
+                tp += 1
+            else:
+                fp += 1
             results.append({
                 "name": name,
                 "true_label": "malware" if true_label else "benign",
@@ -133,18 +138,21 @@ def run_batch_test() -> dict:
                 "correct": true_label == 1,
                 "confidence": 0,
                 "extraction_failed": True,
-                "error": str(e)
+                "error": str(exc),
             })
 
-    total = TP + TN + FP + FN
-    accuracy = round((TP + TN) / total * 100, 1)
-    precision = round(TP / (TP + FP) * 100, 1) if (TP + FP) > 0 else 0
-    recall = round(TP / (TP + FN) * 100, 1) if (TP + FN) > 0 else 0
-    f1 = round(2 * precision * recall / (precision + recall), 1) if (precision + recall) > 0 else 0
+    total = tp + tn + fp + fn
+    accuracy = round((tp + tn) / total * 100, 1) if total else 0
+    precision = round(tp / (tp + fp) * 100, 1) if (tp + fp) else 0
+    recall = round(tp / (tp + fn) * 100, 1) if (tp + fn) else 0
+    f1 = round(2 * precision * recall / (precision + recall), 1) if (precision + recall) else 0
 
     return {
         "total_samples": total,
-        "TP": TP, "TN": TN, "FP": FP, "FN": FN,
+        "TP": tp,
+        "TN": tn,
+        "FP": fp,
+        "FN": fn,
         "accuracy": accuracy,
         "precision": precision,
         "recall": recall,
@@ -153,11 +161,11 @@ def run_batch_test() -> dict:
         "false_positives": false_positives,
         "results": results,
         "model": "K-Means (k=2) with StandardScaler",
-        "extraction_failures": extraction_failures
+        "validation_notice": "Synthetic feature-vector experiment only; not a real-world APK malware benchmark.",
+        "extraction_failures": extraction_failures,
     }
 
 if __name__ == "__main__":
-    import json
     result = run_batch_test()
     print(f"Total: {result['total_samples']} | TP={result['TP']} TN={result['TN']} FP={result['FP']} FN={result['FN']}")
     print(f"Accuracy: {result['accuracy']}% | Precision: {result['precision']}% | Recall: {result['recall']}% | F1: {result['f1_score']}%")

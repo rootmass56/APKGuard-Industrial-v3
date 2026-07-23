@@ -151,46 +151,43 @@ def calculate_dynamic_score(dynamic_result):
     }
 
 def calculate_final_score(static_result, dynamic_result=None):
-    """
-    Combine static and dynamic scores using weighted average.
-    Static and dynamic use MUTUALLY EXCLUSIVE data sources.
-    
-    Formula:
-    - If dynamic available (live Frida): Final = 0.6 * Static + 0.4 * Dynamic
-    - If simulation only: Final = 0.8 * Static + 0.2 * Dynamic  
-    - If no dynamic: Final = Static only
+    """Combine static score with *observed* dynamic score only.
+
+    Sprint 0 correctness rule: simulated or inferred behaviour is never used as
+    dynamic evidence. If live runtime instrumentation is unavailable, the final
+    score is the static score.
     """
     static_score = static_result.get("score", 0)
-    
+
     if not dynamic_result or not dynamic_result.get("dynamic_available"):
         return {
             "final_score": static_score,
             "static_score": static_score,
             "dynamic_score": 0,
             "scoring_mode": "static_only",
-            "breakdown": static_result.get("breakdown", [])
+            "breakdown": static_result.get("breakdown", []),
+            "dynamic_breakdown": [],
         }
-    
+
     dynamic_data = calculate_dynamic_score(dynamic_result)
+    if not dynamic_data.get("is_live_frida"):
+        return {
+            "final_score": static_score,
+            "static_score": static_score,
+            "dynamic_score": 0,
+            "scoring_mode": "static_only_dynamic_untrusted",
+            "breakdown": static_result.get("breakdown", []),
+            "dynamic_breakdown": [],
+        }
+
     dynamic_score = dynamic_data["dynamic_score"]
-    is_live = dynamic_data.get("is_live_frida", False)
-    
-    if is_live:
-        # Live Frida data is more reliable — give it more weight
-        final = round(0.6 * static_score + 0.4 * dynamic_score)
-        mode = "static_dynamic_live"
-    else:
-        # Simulation — give static more weight
-        final = round(0.8 * static_score + 0.2 * dynamic_score)
-        mode = "static_dynamic_simulation"
-    
-    final = min(final, 100)
-    
+    final = min(round(0.6 * static_score + 0.4 * dynamic_score), 100)
+
     return {
         "final_score": final,
         "static_score": static_score,
         "dynamic_score": dynamic_score,
-        "scoring_mode": mode,
+        "scoring_mode": "static_dynamic_live",
         "breakdown": static_result.get("breakdown", []),
-        "dynamic_breakdown": dynamic_data.get("dynamic_breakdown", [])
+        "dynamic_breakdown": dynamic_data.get("dynamic_breakdown", []),
     }

@@ -1,16 +1,21 @@
-# React + Vite
+# APKGuard Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + Vite analyst dashboard for the APKGuard industrial rebuild.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-## React Compiler
+Configure the backend URL in `.env`:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```text
+VITE_API_URL=http://localhost:8000
+```
 
-## Expanding the ESLint configuration
+## Sprint 0 UI policy
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+The UI must not claim that an APK is clean when an external lookup is unavailable, must not use zero-day wording for heuristic findings, and must not display fake analysis progress that implies completed backend stages before upload.
