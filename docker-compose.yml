@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: apkguard
+      POSTGRES_USER: apkguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-development-only}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apkguard -d apkguard"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [apkguard_internal]
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [apkguard_internal]
+
+  api:
+    build: ./backend
+    environment: &backend_environment
+      APKGUARD_ENVIRONMENT: docker-development
+      APKGUARD_DATABASE_URL: postgresql+psycopg://apkguard:${POSTGRES_PASSWORD:-change-me-development-only}@postgres:5432/apkguard
+      APKGUARD_AUTO_CREATE_DATABASE: "false"
+      APKGUARD_QUEUE_BACKEND: redis
+      APKGUARD_REDIS_URL: redis://redis:6379/0
+      APKGUARD_QUARANTINE_DIR: /app/data/quarantine
+      APKGUARD_ANALYSIS_ISOLATION: subprocess
+      APKGUARD_PRIVACY_MODE: local_only
+      APKGUARD_ALLOW_VT_UPLOAD: "false"
+    volumes:
+      - quarantine_data:/app/data/quarantine
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks: [apkguard_internal]
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.worker"]
+    environment: *backend_environment
+    volumes:
+      - quarantine_data:/app/data/quarantine
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      api: {condition: service_healthy}
+    networks: [apkguard_internal]
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "5173:80"
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [apkguard_internal]
+
+networks:
+  apkguard_internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  quarantine_data:

@@ -31,6 +31,17 @@ def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
     return min(max(parsed, minimum), maximum)
 
 
+def _env_float(name: str, default: float, minimum: float, maximum: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return default
+    return min(max(parsed, minimum), maximum)
+
+
 def _env_csv(name: str, default: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in os.getenv(name, default).split(",") if item.strip())
 
@@ -41,15 +52,25 @@ def _privacy_mode() -> str:
     return configured if configured in allowed else "local_only"
 
 
+def _queue_backend() -> str:
+    configured = os.getenv("APKGUARD_QUEUE_BACKEND", "eager").strip().lower()
+    return configured if configured in {"eager", "redis"} else "eager"
+
+
+def _analysis_isolation_mode() -> str:
+    configured = os.getenv("APKGUARD_ANALYSIS_ISOLATION", "inline").strip().lower()
+    return configured if configured in {"inline", "subprocess"} else "inline"
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Immutable application settings resolved from environment variables."""
 
     app_name: str = "APKGuard Industrial v3"
-    app_version: str = "3.0.0-phase1"
+    app_version: str = "3.1.0-phase2"
     api_version: str = "v1"
     api_prefix: str = "/api/v1"
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     environment: str = os.getenv("APKGUARD_ENVIRONMENT", "development")
     log_level: str = os.getenv("APKGUARD_LOG_LEVEL", "INFO").upper()
     log_format: str = os.getenv("APKGUARD_LOG_FORMAT", "text").lower()
@@ -75,6 +96,27 @@ class Settings:
     history_file: Path = Path(
         os.getenv("APKGUARD_HISTORY_FILE", str(Path.home() / "apkguard" / "scan_history.json"))
     ).expanduser()
+
+    database_url: str = os.getenv(
+        "APKGUARD_DATABASE_URL",
+        f"sqlite:///{(BACKEND_ROOT / 'data' / 'apkguard.db').as_posix()}",
+    ).strip()
+    database_echo: bool = _env_bool("APKGUARD_DATABASE_ECHO", False)
+    auto_create_database: bool = _env_bool("APKGUARD_AUTO_CREATE_DATABASE", False)
+    quarantine_dir: Path = Path(
+        os.getenv("APKGUARD_QUARANTINE_DIR", str(BACKEND_ROOT / "data" / "quarantine"))
+    ).expanduser()
+    quarantine_retention_days: int = _env_int("APKGUARD_QUARANTINE_RETENTION_DAYS", 30, 1, 3650)
+
+    queue_backend: str = _queue_backend()
+    redis_url: str = os.getenv("APKGUARD_REDIS_URL", "redis://localhost:6379/0").strip()
+    redis_queue_name: str = os.getenv("APKGUARD_REDIS_QUEUE", "apkguard:scan-jobs").strip()
+    worker_poll_seconds: float = _env_float("APKGUARD_WORKER_POLL_SECONDS", 2.0, 0.1, 60.0)
+    job_timeout_seconds: int = _env_int("APKGUARD_JOB_TIMEOUT_SECONDS", 900, 10, 86400)
+    job_max_attempts: int = _env_int("APKGUARD_JOB_MAX_ATTEMPTS", 2, 1, 10)
+    job_retry_delay_seconds: float = _env_float("APKGUARD_JOB_RETRY_DELAY_SECONDS", 1.0, 0.0, 300.0)
+    stale_job_seconds: int = _env_int("APKGUARD_STALE_JOB_SECONDS", 1800, 30, 86400)
+    analysis_isolation_mode: str = _analysis_isolation_mode()
 
     vt_api_key: str = os.getenv("VT_API_KEY", "").strip()
     groq_api_key: str = os.getenv("GROQ_API_KEY", "").strip()
@@ -110,6 +152,7 @@ def get_settings() -> Settings:
     """Return the process-wide immutable settings object."""
     settings = Settings()
     settings.cache_dir.mkdir(parents=True, exist_ok=True)
+    settings.quarantine_dir.mkdir(parents=True, exist_ok=True)
     if settings.history_enabled:
         settings.history_file.parent.mkdir(parents=True, exist_ok=True)
     return settings

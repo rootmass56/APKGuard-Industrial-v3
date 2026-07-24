@@ -95,15 +95,24 @@ class ScanService:
         self.history = history
         self.virustotal = VirusTotalHashClient(settings)
 
-    def analyze(self, artifact: UploadArtifact, request_id: str) -> ScanResponse:
-        cached = self.cache.load(artifact.sha256)
+    def analyze(
+        self,
+        artifact: UploadArtifact,
+        request_id: str,
+        *,
+        scan_id: str | None = None,
+        execution_mode: str = "synchronous_compatibility_phase2",
+        allow_cache: bool = True,
+        record_legacy_history: bool = True,
+    ) -> ScanResponse:
+        cached = self.cache.load(artifact.sha256) if allow_cache else None
         if cached:
             cached["cache_hit"] = True
             cached["request_id"] = request_id
-            cached["integrity_note"] = "Phase 1 cached result retrieved from the versioned local cache."
+            cached["integrity_note"] = "Phase 2 compatibility result retrieved from the versioned local cache."
             return ScanResponse.model_validate(cached)
 
-        scan_id = str(uuid4())
+        scan_id = scan_id or str(uuid4())
         scan_started = utc_now()
         stages: list[ScanStageResult] = []
         partial_failure = False
@@ -484,7 +493,7 @@ class ScanService:
             severity=score.severity,
             result_digest=result_digest,
             result_digest_scope="analysis_core_v1",
-            execution_mode="synchronous_compatibility_phase1",
+            execution_mode=execution_mode,
             analyzer_versions=analyzer_versions,
             stages=stages,
             evidence=evidence,
@@ -492,7 +501,6 @@ class ScanService:
             score=score,
             privacy=privacy,
             limitations=[
-                "Phase 1 still executes analysis synchronously; queued workers arrive in Phase 2.",
                 "Dynamic analysis is not executed until the isolated Android sandbox is implemented.",
                 "The ML output is a synthetic advisory baseline and does not affect the score.",
             ],
@@ -517,7 +525,7 @@ class ScanService:
             scoring_mode=score.scoring_mode,
             cache_hit=False,
             integrity_note=(
-                "Phase 1 result uses versioned evidence and scoring contracts. Runtime evidence is included only "
+                "Phase 2 result is stored immutably when executed through the job API. Runtime evidence is included only "
                 "when an isolated sandbox reports observed events."
             ),
             privacy_mode={
@@ -529,21 +537,23 @@ class ScanService:
             },
         )
         result_dict = response.model_dump(mode="json")
-        self.cache.save(artifact.sha256, result_dict)
-        self.history.append(
-            {
-                "scan_id": scan_id,
-                "schema_version": self.settings.schema_version,
-                "filename": artifact.original_filename,
-                "risk_score": score.final_score,
-                "severity": str(score.severity),
-                "scan_time": scan_started.isoformat(),
-                "package": package_name or "",
-                "sha256": artifact.sha256,
-                "vt_status": virustotal.get("status"),
-                "vt_detected": virustotal.get("detected"),
-                "result_status": result_status.value,
-                "result_digest": result_digest,
-            }
-        )
+        if allow_cache:
+            self.cache.save(artifact.sha256, result_dict)
+        if record_legacy_history:
+            self.history.append(
+                {
+                    "scan_id": scan_id,
+                    "schema_version": self.settings.schema_version,
+                    "filename": artifact.original_filename,
+                    "risk_score": score.final_score,
+                    "severity": str(score.severity),
+                    "scan_time": scan_started.isoformat(),
+                    "package": package_name or "",
+                    "sha256": artifact.sha256,
+                    "vt_status": virustotal.get("status"),
+                    "vt_detected": virustotal.get("detected"),
+                    "result_status": result_status.value,
+                    "result_digest": result_digest,
+                }
+            )
         return response

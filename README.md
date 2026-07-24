@@ -134,3 +134,8 @@ APKGuard is intended for authorized mobile-security testing, incident response, 
 ## Industrial v3 Phase 1
 
 The `industrial-v3` branch now uses a versioned `/api/v1` API, canonical evidence and finding schemas, request IDs, standard errors, policy-controlled privacy modes, streamed APK validation, versioned scoring, stage telemetry, and result integrity digests. Root API routes remain temporarily available for frontend compatibility. See `docs/PHASE_1_ARCHITECTURE.md`.
+
+
+## Phase 2
+
+Persistent scan jobs, content-addressed quarantine, immutable results, real progress, cancellation, retries, timeout controls, PostgreSQL/Redis adapters and Docker Compose are implemented. The Android execution sandbox remains a later phase.
