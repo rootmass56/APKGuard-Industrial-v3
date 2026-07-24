@@ -29,6 +29,6 @@ def test_health_reports_phase2_persistence():
         response = client.get("/api/v1/health")
         assert response.status_code == 200
         body = response.json()
-        assert body["version"] == "3.1.0-phase2"
+        assert body["version"] == "3.2.0-phase3"
         assert body["modules"]["database"]["immutable_results"] is True
         assert body["modules"]["quarantine"]["execution_permitted"] is False

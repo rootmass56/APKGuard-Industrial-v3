@@ -10,7 +10,7 @@ from app.schemas.common import Severity
 from app.schemas.evidence import EvidenceRecord
 from app.schemas.scan import ScoreComponent, VersionedScoreResult
 
-SCORING_POLICY_VERSION = "apkguard-risk-policy/1.0.0"
+SCORING_POLICY_VERSION = "apkguard-risk-policy/2.0.0-phase3"
 _MAX_POINTS = {
     "Dangerous Permissions": 30,
     "Suspicious API Calls": 25,
@@ -55,7 +55,11 @@ def calculate_versioned_score(
 ) -> tuple[VersionedScoreResult, dict[str, Any]]:
     legacy_static = calculate_score(analysis, behavioral, virustotal)
     legacy_final = calculate_final_score(legacy_static, dynamic)
-    final_score = int(legacy_final.get("final_score", legacy_static.get("score", 0)))
+    legacy_score = int(legacy_final.get("final_score", legacy_static.get("score", 0)))
+    advanced_records = [record for record in evidence if record.analyzer == "apkguard-advanced-static"]
+    advanced_points = sum(int(record.metadata.get("risk_points", 0)) for record in advanced_records)
+    advanced_adjustment = min(20, advanced_points // 4)
+    final_score = min(100, legacy_score + advanced_adjustment)
 
     components = [
         ScoreComponent(
@@ -82,12 +86,26 @@ def calculate_versioned_score(
         for item in legacy_final.get("dynamic_breakdown", [])
     ]
 
+    if advanced_adjustment:
+        components.append(
+            ScoreComponent(
+                category="Advanced Static Analysis",
+                points=advanced_adjustment,
+                max_points=20,
+                detail=(
+                    f"Conservative Phase 3 adjustment derived from {len(advanced_records)} advanced deterministic "
+                    "evidence records; duplicate legacy categories are bounded by a 20-point cap."
+                ),
+                evidence_ids=[record.evidence_id for record in advanced_records],
+            )
+        )
+
     result = VersionedScoreResult(
         policy_version=SCORING_POLICY_VERSION,
         final_score=final_score,
         severity=_severity(final_score),
         scoring_mode=str(legacy_final.get("scoring_mode", "static_only")),
-        static_score=int(legacy_final.get("static_score", final_score)),
+        static_score=min(100, int(legacy_final.get("static_score", legacy_score)) + advanced_adjustment),
         dynamic_score=int(legacy_final.get("dynamic_score", 0)),
         components=components,
         dynamic_components=dynamic_components,

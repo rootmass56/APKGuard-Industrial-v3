@@ -20,6 +20,8 @@ from dotenv import load_dotenv
 
 from behavioral import analyze_behavior
 
+from app.static_analysis import ADVANCED_STATIC_ANALYZER_VERSION, run_advanced_static_analysis
+
 load_dotenv(Path(__file__).with_name(".env"))
 log = logging.getLogger("apkguard.analyzer")
 
@@ -277,7 +279,7 @@ def analyze_apk(apk_path: str | os.PathLike[str]) -> dict[str, Any]:
     path = Path(apk_path)
     results: dict[str, Any] = {
         "status": "success",
-        "analyzer": {"name": "apkguard_static", "version": "2.1.0-sprint0-sec1"},
+        "analyzer": {"name": "apkguard_static", "version": "3.2.0-phase3"},
         "file_info": {},
         "app_info": {},
         "permissions": {"dangerous": [], "all": []},
@@ -297,6 +299,8 @@ def analyze_apk(apk_path: str | os.PathLike[str]) -> dict[str, Any]:
         results["errors"].append(f"Hash calculation failed: {exc}")
         results["status"] = "partial"
 
+    apk = None
+    analysis = None
     try:
         from androguard.misc import AnalyzeAPK
 
@@ -368,6 +372,37 @@ def analyze_apk(apk_path: str | os.PathLike[str]) -> dict[str, Any]:
 
     results["urls_ips"] = extract_urls_and_ips(path)
     results["native_libs"] = detect_native_libs(path)
+
+
+    try:
+        advanced = run_advanced_static_analysis(
+            path,
+            apk=apk,
+            dx=analysis,
+            apk_sha256=str(results.get("file_info", {}).get("sha256", "")),
+        )
+        results["advanced_static"] = advanced
+        results["signing"] = advanced.get("signing", {})
+        results["attack_surface"] = advanced.get("attack_surface", {})
+        results["network_security"] = advanced.get("network_security", {})
+        results["native_analysis"] = advanced.get("native_analysis", {})
+        results["dependency_inventory"] = advanced.get("dependency_inventory", [])
+        results["sbom"] = advanced.get("sbom", {})
+        results["call_graph"] = advanced.get("call_graph", {})
+        results["data_flows"] = advanced.get("data_flows", [])
+        results["analyzer"]["advanced_static_version"] = ADVANCED_STATIC_ANALYZER_VERSION
+        if advanced.get("status") != "completed":
+            results["status"] = "partial"
+    except (OSError, ValueError, TypeError, zipfile.BadZipFile) as exc:
+        log.warning("Advanced static analysis failed: %s", exc)
+        results["advanced_static"] = {
+            "status": "failed",
+            "evidence": [],
+            "findings": [],
+            "limitations": ["Advanced static analysis failed before completion."],
+        }
+        results["errors"].append(f"Advanced static analysis failed: {type(exc).__name__}")
+        results["status"] = "partial"
 
     try:
         results["behavioral_analysis"] = analyze_behavior(str(path), analysis=results)

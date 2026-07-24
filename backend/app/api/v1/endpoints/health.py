@@ -26,7 +26,7 @@ async def health() -> HealthResponse:
         api_version=settings.api_version,
         schema_version=settings.schema_version,
         request_id=get_request_id(),
-        execution_mode=f"asynchronous_jobs_{settings.queue_backend}_phase2",
+        execution_mode=f"asynchronous_jobs_{settings.queue_backend}_phase3",
         modules={
             **get_capabilities().health(),
             "database": {
@@ -43,6 +43,13 @@ async def health() -> HealthResponse:
                 "available": settings.quarantine_dir.exists(),
                 "content_addressed": True,
                 "execution_permitted": False,
+            },
+            "advanced_static_analysis": {
+                "available": True,
+                "sbom_generation": True,
+                "call_graph_foundation": True,
+                "source_sink_candidates": True,
+                "runtime_claims": False,
             },
         },
         privacy_mode={

@@ -8,7 +8,7 @@ from typing import Any
 from app.schemas.common import EvidenceType, Severity
 from app.schemas.evidence import EvidenceLocation, EvidenceRecord, Finding
 
-EVIDENCE_FACTORY_VERSION = "evidence-factory/1.0.0"
+EVIDENCE_FACTORY_VERSION = "evidence-factory/2.0.0-phase3"
 
 
 def stable_id(prefix: str, *parts: Any) -> str:
@@ -224,6 +224,20 @@ def build_evidence_and_findings(
             limitation=limitation,
             metadata={"category": "inference", "basis": inferred.get("basis", [])},
         )
+
+    advanced = analysis.get("advanced_static", {})
+    existing_evidence_ids = {item.evidence_id for item in evidence}
+    existing_finding_ids = {item.finding_id for item in findings}
+    for raw in advanced.get("evidence", []):
+        record = EvidenceRecord.model_validate(raw)
+        if record.evidence_id not in existing_evidence_ids:
+            evidence.append(record)
+            existing_evidence_ids.add(record.evidence_id)
+    for raw in advanced.get("findings", []):
+        finding = Finding.model_validate(raw)
+        if finding.finding_id not in existing_finding_ids:
+            findings.append(finding)
+            existing_finding_ids.add(finding.finding_id)
 
     if dynamic.get("dynamic_available"):
         for index, event in enumerate(dynamic.get("observed_events", [])):

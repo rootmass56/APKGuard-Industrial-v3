@@ -67,10 +67,10 @@ class Settings:
     """Immutable application settings resolved from environment variables."""
 
     app_name: str = "APKGuard Industrial v3"
-    app_version: str = "3.1.0-phase2"
+    app_version: str = "3.2.0-phase3"
     api_version: str = "v1"
     api_prefix: str = "/api/v1"
-    schema_version: str = "1.1"
+    schema_version: str = "1.2"
     environment: str = os.getenv("APKGUARD_ENVIRONMENT", "development")
     log_level: str = os.getenv("APKGUARD_LOG_LEVEL", "INFO").upper()
     log_format: str = os.getenv("APKGUARD_LOG_FORMAT", "text").lower()

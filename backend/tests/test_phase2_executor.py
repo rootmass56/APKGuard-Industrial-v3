@@ -40,7 +40,7 @@ class FakeRunner:
             risk_score=0,
             severity=Severity.INFO,
             result_digest=digest,
-            result_digest_scope="analysis_core_v1",
+            result_digest_scope="analysis_core_v2_phase3",
             execution_mode=request.execution_mode,
             analyzer_versions={"orchestrator": "test"},
             stages=[],
