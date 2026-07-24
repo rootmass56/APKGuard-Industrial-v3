@@ -183,7 +183,7 @@ def _request_without_environment_proxy(
         session.close()
 
 
-def unshorten_url(url: str) -> tuple[str, bool]:
+def unshorten_url(url: str, allow_network: bool = True) -> tuple[str, bool]:
     """Resolve a known short URL through a bounded, validated redirect chain."""
     try:
         hostname = _normalized_hostname(url)
@@ -193,6 +193,8 @@ def unshorten_url(url: str) -> tuple[str, bool]:
 
     if not _is_known_shortener(hostname):
         return url, False
+    if not allow_network:
+        return url, True
 
     current_url = url
 
@@ -297,8 +299,8 @@ def _parse_public_url(url: str) -> tuple[str, str]:
     return hostname, tld
 
 
-def analyze_url(url: str) -> dict[str, object]:
-    """Analyze a single URL using local indicators and OpenPhish enrichment."""
+def analyze_url(url: str, allow_external_lookup: bool = True) -> dict[str, object]:
+    """Analyze a URL with local heuristics and optional external enrichment."""
     original_url = str(url or "").strip()
     result: dict[str, object] = {
         "url": original_url,
@@ -320,7 +322,9 @@ def analyze_url(url: str) -> dict[str, object]:
         result["risk_score"] = 40
         return result
 
-    resolved_url, was_shortened = unshorten_url(original_url)
+    resolved_url, was_shortened = unshorten_url(
+        original_url, allow_network=allow_external_lookup
+    )
     result["url"] = resolved_url
 
     suspicious_patterns = result["suspicious_patterns"]
@@ -351,7 +355,10 @@ def analyze_url(url: str) -> dict[str, object]:
         result["risk_score"] = 40
         return result
 
-    matched_openphish, openphish_status = _check_openphish_with_status(resolved_url)
+    if allow_external_lookup:
+        matched_openphish, openphish_status = _check_openphish_with_status(resolved_url)
+    else:
+        matched_openphish, openphish_status = False, "disabled_by_privacy_policy"
     result["openphish_status"] = openphish_status
 
     threats = result["threats"]
@@ -380,7 +387,7 @@ def analyze_url(url: str) -> dict[str, object]:
         result["risk_level"] = "malicious"
     elif score >= 30:
         result["risk_level"] = "suspicious"
-    elif openphish_status == "unavailable":
+    elif openphish_status in {"unavailable", "disabled_by_privacy_policy"}:
         result["risk_level"] = "unknown"
     else:
         result["risk_level"] = "safe"
@@ -391,8 +398,10 @@ def analyze_url(url: str) -> dict[str, object]:
     return result
 
 
-def scan_message(message: str) -> dict[str, object]:
-    """Scan a WhatsApp/SMS message for embedded HTTP(S) URLs."""
+def scan_message(
+    message: str, allow_external_lookup: bool = True
+) -> dict[str, object]:
+    """Scan a message with local heuristics and optional external enrichment."""
     urls = extract_urls(message)
 
     if not urls:
@@ -406,7 +415,9 @@ def scan_message(message: str) -> dict[str, object]:
             "timestamp": _utc_now_iso(),
         }
 
-    results = [analyze_url(url) for url in urls]
+    results = [
+        analyze_url(url, allow_external_lookup=allow_external_lookup) for url in urls
+    ]
     scores = [int(result.get("risk_score", 0)) for result in results]
     max_score = max(scores, default=0)
 

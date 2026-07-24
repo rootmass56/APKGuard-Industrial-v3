@@ -130,3 +130,7 @@ npm run build
 ## Ethical use
 
 APKGuard is intended for authorized mobile-security testing, incident response, education, and defensive malware triage. Do not use it to analyze, distribute, execute, or modify malware outside a controlled and authorized environment.
+
+## Industrial v3 Phase 1
+
+The `industrial-v3` branch now uses a versioned `/api/v1` API, canonical evidence and finding schemas, request IDs, standard errors, policy-controlled privacy modes, streamed APK validation, versioned scoring, stage telemetry, and result integrity digests. Root API routes remain temporarily available for frontend compatibility. See `docs/PHASE_1_ARCHITECTURE.md`.

@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import "./index.css";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1";
 const sev = (s) => { s = (s||"").toUpperCase(); const m = { CRITICAL:{color:"var(--c-critical)",icon:AlertOctagon,label:"CRITICAL"}, HIGH:{color:"var(--c-high)",icon:AlertTriangle,label:"HIGH"}, MEDIUM:{color:"var(--c-medium)",icon:Info,label:"MEDIUM"}, LOW:{color:"var(--c-low)",icon:CheckCircle,label:"LOW"}, INFO:{color:"var(--c-info)",icon:Info,label:"INFO"} }; return m[s]||m.INFO; };
 const mitreColor=(t)=>({"Initial Access":"#ef4444","Execution":"#f97316","Persistence":"#f59e0b","Privilege Escalation":"#eab308","Defense Evasion":"#84cc16","Credential Access":"#22c55e","Discovery":"#06b6d4","Lateral Movement":"#3b82f6","Collection":"#8b5cf6","Exfiltration":"#ec4899","Command and Control":"#dc2626","Impact":"#991b1b"})[t]||"#6b7280";
 const gaugeColor=(s)=>s>=80?"#ef4444":s>=60?"#f97316":s>=40?"#f59e0b":s>=20?"#84cc16":"#22c55e";
@@ -262,7 +262,7 @@ function DynamicPanel({dynamic}){
     <div className="panel" style={{marginTop:16}}>
       <div className="panel-head"><Zap size={16}/>Dynamic Analysis
         <span className="panel-count">{dynamic.total_events} events</span>
-        {dynamic.analysis_method==="frida_live_instrumentation" ? <span className="ai-badge" style={{background:"var(--c-critical)22",color:"var(--c-critical)",borderColor:"var(--c-critical)44"}}>LIVE FRIDA</span> : <span className="ai-badge" style={{background:"var(--c-medium)22",color:"var(--c-medium)",borderColor:"var(--c-medium)44"}}>Behavioral Simulation</span>}
+        {dynamic.analysis_method==="frida_live_instrumentation" ? <span className="ai-badge" style={{background:"var(--c-critical)22",color:"var(--c-critical)",borderColor:"var(--c-critical)44"}}>LIVE FRIDA</span> : <span className="ai-badge" style={{background:"var(--c-medium)22",color:"var(--c-medium)",borderColor:"var(--c-medium)44"}}>OBSERVED SANDBOX</span>}
         <span style={{marginLeft:"auto",fontSize:12,color:riskColor,fontWeight:800,background:`${riskColor}22`,padding:"2px 10px",borderRadius:4,border:`1px solid ${riskColor}44`}}>RISK: {riskScore}/100</span>
       </div>
       <div style={{padding:"10px 16px 4px",fontSize:12,color:"var(--fg-dim)"}}>{dynamic.summary}</div>
