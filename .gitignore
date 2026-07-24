@@ -224,3 +224,9 @@ node_modules/
 backend/cache/
 *.sqlite3
 *.sqlite3-journal
+
+backend/data/
+*.db
+*.db-journal
+postgres_data/
+redis_data/

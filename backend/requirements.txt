@@ -1,4 +1,4 @@
-# APKGuard Industrial v3 Phase 1 core backend dependencies
+# APKGuard Industrial v3 Phase 2 core backend dependencies
 fastapi>=0.115,<1.0
 uvicorn[standard]>=0.30,<1.0
 python-multipart>=0.0.9,<1.0
@@ -9,3 +9,7 @@ androguard>=4.1,<5.0
 reportlab>=4.2,<5.0
 numpy>=1.26,<3.0
 scikit-learn>=1.5,<2.0
+SQLAlchemy>=2.0.35,<3.0
+alembic>=1.14,<2.0
+redis>=5.2,<7.0
+psycopg[binary]>=3.2,<4.0

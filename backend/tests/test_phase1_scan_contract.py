@@ -102,7 +102,7 @@ def test_scan_service_builds_versioned_evidence_contract(monkeypatch, tmp_path: 
 
     response = service.analyze(artifact, "request-phase1")
 
-    assert response.schema_version == "1.0"
+    assert response.schema_version == "1.1"
     assert response.request_id == "request-phase1"
     assert response.result_digest_scope == "analysis_core_v1"
     assert len(response.result_digest) == 64

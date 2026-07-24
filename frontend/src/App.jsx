@@ -13,7 +13,10 @@ const sev = (s) => { s = (s||"").toUpperCase(); const m = { CRITICAL:{color:"var
 const mitreColor=(t)=>({"Initial Access":"#ef4444","Execution":"#f97316","Persistence":"#f59e0b","Privilege Escalation":"#eab308","Defense Evasion":"#84cc16","Credential Access":"#22c55e","Discovery":"#06b6d4","Lateral Movement":"#3b82f6","Collection":"#8b5cf6","Exfiltration":"#ec4899","Command and Control":"#dc2626","Impact":"#991b1b"})[t]||"#6b7280";
 const gaugeColor=(s)=>s>=80?"#ef4444":s>=60?"#f97316":s>=40?"#f59e0b":s>=20?"#84cc16":"#22c55e";
 const gaugeLabel=(s)=>s>=80?"CRITICAL":s>=60?"HIGH":s>=40?"MEDIUM":s>=20?"LOW":"SAFE";
-const STAGES=[{icon:Package,label:"Uploading APK"},{icon:Search,label:"Server analysis running"},{icon:Lock,label:"Evidence review"},{icon:BarChart2,label:"Finalizing result"}];
+const STAGES=[{icon:Package,label:"Validating and quarantining APK"},{icon:Clock,label:"Queued for analysis"},{icon:Search,label:"Worker analysis running"},{icon:Lock,label:"Persisting immutable evidence"},{icon:BarChart2,label:"Analysis complete"}];
+const TERMINAL_JOB_STATES=new Set(["COMPLETED","PARTIAL","FAILED","CANCELLED","TIMED_OUT"]);
+const stageFromJob=(job)=>{const state=(job?.state||"").toUpperCase();if(["CREATED","VALIDATING","QUARANTINED"].includes(state))return 0;if(state==="QUEUED")return 1;if(["RUNNING","CANCEL_REQUESTED"].includes(state))return job?.current_stage==="persisting_result"?3:2;return 4;};
+const apiErrorMessage=async(response,fallback)=>{const payload=await response.json().catch(()=>null);return payload?.error?.message||payload?.detail||fallback;};
 const DANGEROUS=["CAMERA","RECORD_AUDIO","READ_CONTACTS","ACCESS_FINE_LOCATION","READ_SMS","PROCESS_OUTGOING_CALLS","SEND_SMS","READ_CALL_LOG","READ_PHONE_STATE","REQUEST_INSTALL_PACKAGES"];
 
 function UploadPage({onResults}){
@@ -23,22 +26,43 @@ function UploadPage({onResults}){
   const [errMsg,setErrMsg]=useState("");
   const [stageIdx,setStageIdx]=useState(0);
   const [progress,setProgress]=useState(0);
+  const [jobId,setJobId]=useState(null);
   const inputRef=useRef();
   const handleFile=(f)=>{if(!f)return;if(!f.name.endsWith(".apk")){setErrMsg("Only .apk files accepted.");setStatus("error");return;}setFile(f);setStatus("idle");setErrMsg("");};
   const onDrop=useCallback((e)=>{e.preventDefault();setDragging(false);handleFile(e.dataTransfer.files[0]);},[]);
   const analyze=async()=>{
     if(!file)return;
-    setStatus("scanning");setStageIdx(0);setProgress(10);
+    setStatus("scanning");setStageIdx(0);setProgress(0);setErrMsg("");setJobId(null);
     const form=new FormData();form.append("file",file);
     try{
-      setStageIdx(1);setProgress(35);
-      const res=await fetch(`${API}/analyze`,{method:"POST",body:form});
-      setStageIdx(2);setProgress(75);
-      if(!res.ok){const e=await res.json().catch(()=>({detail:"Analysis failed"}));throw new Error(e.detail||"Analysis failed");}
-      const data=await res.json();
-      setStageIdx(3);setProgress(100);
+      const submit=await fetch(`${API}/scans`,{method:"POST",body:form});
+      if(!submit.ok)throw new Error(await apiErrorMessage(submit,"Scan submission failed"));
+      let job=await submit.json();
+      setJobId(job.scan_id);setProgress(job.progress??0);setStageIdx(stageFromJob(job));
+      while(!TERMINAL_JOB_STATES.has((job.state||"").toUpperCase())){
+        await new Promise(resolve=>setTimeout(resolve,500));
+        const statusResponse=await fetch(`${API}/scans/${job.scan_id}`);
+        if(!statusResponse.ok)throw new Error(await apiErrorMessage(statusResponse,"Unable to read scan progress"));
+        job=await statusResponse.json();
+        setProgress(job.progress??0);setStageIdx(stageFromJob(job));
+      }
+      if(!["COMPLETED","PARTIAL"].includes((job.state||"").toUpperCase())){
+        throw new Error(job.error_message||`Scan ended with state ${job.state}`);
+      }
+      const resultResponse=await fetch(`${API}/scans/${job.scan_id}/result`);
+      if(!resultResponse.ok)throw new Error(await apiErrorMessage(resultResponse,"Result retrieval failed"));
+      const data=await resultResponse.json();
+      setProgress(100);setStageIdx(4);
       setTimeout(()=>onResults(data),250);
     }catch(e){setStatus("error");setErrMsg(e.message);}
+  };
+  const cancelScan=async()=>{
+    if(!jobId)return;
+    try{
+      const response=await fetch(`${API}/scans/${jobId}/cancel`,{method:"POST"});
+      if(!response.ok)throw new Error(await apiErrorMessage(response,"Cancellation failed"));
+      setErrMsg("Cancellation requested. The worker will stop at the next safe checkpoint.");
+    }catch(e){setErrMsg(e.message);}
   };
   const FEATURES=[[Search,"Static Analysis","DEX, manifest, resources"],[Cpu,"Optional AI Summary","Disabled unless configured"],[Eye,"MITRE ATT&CK","Evidence-based mapping"],[Globe,"Hash Reputation","No file upload by default"],[Lock,"Permission Audit","Dangerous perm detection"],[BarChart2,"Risk Scoring","Explainable weighted score"]];
   const STATS=[["Evidence","Based"],["Hash-only","VT Mode"],["AI","Optional"],["Open","Source"]];
@@ -65,7 +89,7 @@ function UploadPage({onResults}){
             <div className="scan-radar"><div className="radar-ring r1"/><div className="radar-ring r2"/><div className="radar-ring r3"/><div className="radar-sweep"/><div className="radar-icon-wrap"><Shield size={26} strokeWidth={1.5}/></div></div>
             <div className="scan-stages">{STAGES.map((s,i)=>{const Icon=s.icon;const done=i<stageIdx,active=i===stageIdx;return(<div key={i} className={`scan-stage ${done?"done":""} ${active?"active":""}`}><div className="stage-dot">{done?<CheckCircle size={12}/>:active?<div className="dot-pulse"/>:<div className="dot-idle"/>}</div><Icon size={13}/><span>{s.label}</span>{done&&<CheckCircle size={11} className="stage-check"/>}</div>);})}</div>
             <div className="scan-progress-wrap"><div className="scan-progress-fill" style={{width:`${progress}%`}}/></div>
-            <div className="scan-pct">{progress}% {STAGES[Math.min(stageIdx,STAGES.length-1)]?.label}</div>
+            <div className="scan-pct">{progress}% {STAGES[Math.min(stageIdx,STAGES.length-1)]?.label}</div>{jobId&&<button className="reset-btn" type="button" onClick={cancelScan} style={{marginTop:12}}>Cancel Scan</button>}
           </div>
         )}
         {status==="error"&&<div className="upload-err"><AlertTriangle size={14}/> {errMsg}</div>}
@@ -436,11 +460,7 @@ function ResultsDashboard({data,onReset}){
 
   const downloadReport=async()=>{
     try{
-      const resp=await fetch(`${API}/report`,{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(data)
-      });
+      const resp=data.scan_id?await fetch(`${API}/scans/${data.scan_id}/report`):await fetch(`${API}/report`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
       if(!resp.ok) throw new Error("Report generation failed");
       const blob=await resp.blob();
       const url=URL.createObjectURL(blob);
