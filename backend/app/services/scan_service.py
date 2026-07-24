@@ -35,7 +35,7 @@ from app.services.scoring_service import SCORING_POLICY_VERSION, calculate_versi
 from app.services.upload_service import UploadArtifact
 
 log = logging.getLogger("apkguard.scan_service")
-STATIC_ANALYZER_VERSION = "static-analyzer/1.0.0-phase1"
+STATIC_ANALYZER_VERSION = "apkguard-static-analyzer/3.2.0-phase3"
 BEHAVIOUR_ANALYZER_VERSION = "static-behaviour-inference/1.0.0"
 ORCHESTRATOR_VERSION = "scan-orchestrator/1.0.0"
 
@@ -101,7 +101,7 @@ class ScanService:
         request_id: str,
         *,
         scan_id: str | None = None,
-        execution_mode: str = "synchronous_compatibility_phase2",
+        execution_mode: str = "synchronous_compatibility_phase3",
         allow_cache: bool = True,
         record_legacy_history: bool = True,
     ) -> ScanResponse:
@@ -109,7 +109,7 @@ class ScanService:
         if cached:
             cached["cache_hit"] = True
             cached["request_id"] = request_id
-            cached["integrity_note"] = "Phase 2 compatibility result retrieved from the versioned local cache."
+            cached["integrity_note"] = "Phase 3 compatibility result retrieved from the versioned local cache."
             return ScanResponse.model_validate(cached)
 
         scan_id = scan_id or str(uuid4())
@@ -147,6 +147,24 @@ class ScanService:
             )
             log.exception("Static analysis failed")
             raise AnalysisFailedError("Static APK analysis failed.") from exc
+
+        advanced_static = analysis.get("advanced_static", {})
+        _stage(
+            stages,
+            name="advanced_static_analysis",
+            status=(
+                StageStatus.SUCCEEDED
+                if advanced_static.get("status") == "completed"
+                else StageStatus.PARTIAL
+            ),
+            analyzer="apkguard-advanced-static",
+            version=str(advanced_static.get("analyzer", {}).get("version", "unavailable")),
+            started_at=started_at,
+            started_perf=timer,
+            evidence_count=int(advanced_static.get("metrics", {}).get("evidence_count", 0)),
+            finding_count=int(advanced_static.get("metrics", {}).get("finding_count", 0)),
+            message="Deterministic manifest, signing, code, native, SBOM, and flow analysis.",
+        )
 
         started_at, timer = utc_now(), perf_counter()
         try:
@@ -463,6 +481,7 @@ class ScanService:
         analyzer_versions = {
             "orchestrator": ORCHESTRATOR_VERSION,
             "static": STATIC_ANALYZER_VERSION,
+            "advanced_static": str(analysis.get("advanced_static", {}).get("analyzer", {}).get("version", "unavailable")),
             "behaviour_inference": BEHAVIOUR_ANALYZER_VERSION,
             "evidence": EVIDENCE_FACTORY_VERSION,
             "scoring_policy": SCORING_POLICY_VERSION,
@@ -492,7 +511,7 @@ class ScanService:
             risk_score=score.final_score,
             severity=score.severity,
             result_digest=result_digest,
-            result_digest_scope="analysis_core_v1",
+            result_digest_scope="analysis_core_v2_phase3",
             execution_mode=execution_mode,
             analyzer_versions=analyzer_versions,
             stages=stages,
@@ -503,8 +522,18 @@ class ScanService:
             limitations=[
                 "Dynamic analysis is not executed until the isolated Android sandbox is implemented.",
                 "The ML output is a synthetic advisory baseline and does not affect the score.",
+                "Phase 3 source-to-sink outputs are bounded static candidates, not proof of runtime data exfiltration.",
             ],
             app_info=analysis.get("app_info", {}),
+            advanced_static=analysis.get("advanced_static", {}),
+            signing=analysis.get("signing", {}),
+            attack_surface=analysis.get("attack_surface", {}),
+            network_security=analysis.get("network_security", {}),
+            native_analysis=analysis.get("native_analysis", {}),
+            dependency_inventory=analysis.get("dependency_inventory", []),
+            sbom=analysis.get("sbom", {}),
+            call_graph=analysis.get("call_graph", {}),
+            data_flows=analysis.get("data_flows", []),
             permissions=analysis.get("permissions", {}).get("all", []),
             behavioral=behavioral,
             static_behavioral_inference=behavioral.get("dynamic_behaviors", []),
@@ -525,7 +554,7 @@ class ScanService:
             scoring_mode=score.scoring_mode,
             cache_hit=False,
             integrity_note=(
-                "Phase 2 result is stored immutably when executed through the job API. Runtime evidence is included only "
+                "Phase 3 result is stored immutably when executed through the job API. Runtime evidence is included only "
                 "when an isolated sandbox reports observed events."
             ),
             privacy_mode={

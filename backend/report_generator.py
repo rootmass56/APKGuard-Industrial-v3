@@ -495,6 +495,39 @@ def generate_pdf_report(data: dict[str, Any]) -> str:
             )
         )
 
+    # Phase 3 advanced static-analysis summary
+    advanced_static = _first_mapping(data, "advanced_static")
+    if advanced_static:
+        metrics = _first_mapping(advanced_static, "metrics")
+        signing = _first_mapping(data, "signing") or _first_mapping(advanced_static, "signing")
+        sbom = _first_mapping(data, "sbom") or _first_mapping(advanced_static, "sbom")
+        schemes = ", ".join(str(item) for item in signing.get("detected_schemes", []))
+        if not schemes and signing.get("v1_present"):
+            schemes = "v1 only"
+        if not schemes:
+            schemes = "not structurally detected"
+        advanced_rows = [
+            ["Metric", "Value"],
+            ["Advanced evidence", metrics.get("evidence_count", 0)],
+            ["Advanced findings", metrics.get("finding_count", 0)],
+            ["Exported components", metrics.get("exported_component_count", 0)],
+            ["Deep-link handlers", metrics.get("deep_link_count", 0)],
+            ["Signing schemes", schemes],
+            ["Native libraries", metrics.get("native_library_count", 0)],
+            ["Dependency fingerprints", metrics.get("dependency_count", 0)],
+            ["Source-to-sink candidates", metrics.get("candidate_flow_count", 0)],
+            ["SBOM components", len(sbom.get("components", []))],
+        ]
+        story.append(Paragraph("Advanced Static Analysis", heading_style))
+        story.extend([_build_table(advanced_rows, [7 * cm, 9 * cm]), Spacer(1, 6)])
+        story.append(
+            Paragraph(
+                "Static call paths and source/sink candidates are not runtime proof. Signing-scheme detection is "
+                "structural unless verified by a controlled apksigner worker.",
+                warning_style,
+            )
+        )
+
     # AI explanation — advisory only
     ai_analysis = _first_mapping(data, "ai_analysis")
     ai_summary = ai_analysis.get("threat_summary") or ai_analysis.get("summary")
@@ -544,7 +577,7 @@ def generate_pdf_report(data: dict[str, Any]) -> str:
         )
 
     # MITRE ATT&CK Mobile mappings
-    mitre = _first_list(data, "mitre_techniques", "mitre_attack")
+    mitre = _first_list(data, "mitre_mappings", "mitre_techniques", "mitre_attack")
     if mitre:
         story.append(Paragraph("MITRE ATT&CK Mobile Mappings", heading_style))
         rows = [["ID", "Technique", "Tactic", "Evidence type"]]

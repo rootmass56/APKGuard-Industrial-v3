@@ -139,3 +139,10 @@ The `industrial-v3` branch now uses a versioned `/api/v1` API, canonical evidenc
 ## Phase 2
 
 Persistent scan jobs, content-addressed quarantine, immutable results, real progress, cancellation, retries, timeout controls, PostgreSQL/Redis adapters and Docker Compose are implemented. The Android execution sandbox remains a later phase.
+
+
+## Phase 3 advanced static analysis
+
+Version `3.2.0-phase3` adds deterministic signing metadata, manifest attack surface, network-security configuration,
+TLS/WebView and cryptography rules, dynamic-code indicators, secret redaction, native ELF metadata, SDK inventory,
+CycloneDX-style SBOM output, call-graph foundations, and explicitly limited source-to-sink candidates.
