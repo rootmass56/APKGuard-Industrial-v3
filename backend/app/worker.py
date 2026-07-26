@@ -9,7 +9,7 @@ from threading import Event
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import get_database
-from app.dependencies import get_job_executor, get_job_queue, get_scan_job_service
+from app.dependencies import get_dynamic_analysis_service, get_job_executor, get_job_queue, get_scan_job_service
 from app.services.job_queue import RedisJobQueue
 
 settings = get_settings()
@@ -30,7 +30,13 @@ def main() -> None:
     if not isinstance(queue, RedisJobQueue):
         raise SystemExit("Redis queue adapter is unavailable.")
     recovered = get_scan_job_service().recover_stale_jobs()
-    log.info("APKGuard worker started queue=%s recovered=%s", settings.redis_queue_name, recovered)
+    sandbox_recovered = get_dynamic_analysis_service().recover_stale_sessions()
+    log.info(
+        "APKGuard worker started queue=%s recovered_jobs=%s recovered_sandboxes=%s",
+        settings.redis_queue_name,
+        recovered,
+        sandbox_recovered,
+    )
     signal.signal(signal.SIGINT, _request_stop)
     signal.signal(signal.SIGTERM, _request_stop)
     executor = get_job_executor()

@@ -142,12 +142,26 @@ def calculate_dynamic_score(dynamic_result):
 
     score = min(score, 100)
 
+    observations = dynamic_result.get("observed_events", [])
+    provenance_complete = bool(observations) and all(
+        event.get("observed_at")
+        and event.get("source")
+        and event.get("evidence_digest")
+        and event.get("session_id")
+        for event in observations
+    )
+    observed_method = method in {
+        "isolated_android_emulator_logcat",
+        "isolated_android_emulator_frida",
+        "isolated_android_emulator_failed",
+    }
+
     return {
         "dynamic_score": score,
         "dynamic_available": True,
         "dynamic_breakdown": breakdown,
         "analysis_method": method,
-        "is_live_frida": method == "frida_live_instrumentation"
+        "is_observed_runtime": observed_method and provenance_complete,
     }
 
 def calculate_final_score(static_result, dynamic_result=None):
@@ -170,7 +184,7 @@ def calculate_final_score(static_result, dynamic_result=None):
         }
 
     dynamic_data = calculate_dynamic_score(dynamic_result)
-    if not dynamic_data.get("is_live_frida"):
+    if not dynamic_data.get("is_observed_runtime"):
         return {
             "final_score": static_score,
             "static_score": static_score,
@@ -181,13 +195,13 @@ def calculate_final_score(static_result, dynamic_result=None):
         }
 
     dynamic_score = dynamic_data["dynamic_score"]
-    final = min(round(0.6 * static_score + 0.4 * dynamic_score), 100)
+    final = min(round(0.7 * static_score + 0.3 * dynamic_score), 100)
 
     return {
         "final_score": final,
         "static_score": static_score,
         "dynamic_score": dynamic_score,
-        "scoring_mode": "static_dynamic_live",
+        "scoring_mode": "static_dynamic_observed",
         "breakdown": static_result.get("breakdown", []),
         "dynamic_breakdown": dynamic_data.get("dynamic_breakdown", []),
     }

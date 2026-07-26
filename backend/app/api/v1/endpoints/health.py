@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from app.core.config import get_settings
 from app.core.context import get_request_id
 from app.db.session import get_database
-from app.dependencies import get_job_queue
+from app.dependencies import get_dynamic_analysis_service, get_job_queue
 from app.schemas.scan import HealthResponse
 from app.services.capabilities import get_capabilities
 
@@ -18,6 +18,7 @@ router = APIRouter(tags=["System"])
 async def health() -> HealthResponse:
     settings = get_settings()
     queue = get_job_queue()
+    sandbox = get_dynamic_analysis_service().capabilities()
     return HealthResponse(
         status="ok",
         timestamp=datetime.now(timezone.utc),
@@ -26,7 +27,7 @@ async def health() -> HealthResponse:
         api_version=settings.api_version,
         schema_version=settings.schema_version,
         request_id=get_request_id(),
-        execution_mode=f"asynchronous_jobs_{settings.queue_backend}_phase3",
+        execution_mode=f"asynchronous_jobs_{settings.queue_backend}_phase4",
         modules={
             **get_capabilities().health(),
             "database": {
@@ -50,6 +51,16 @@ async def health() -> HealthResponse:
                 "call_graph_foundation": True,
                 "source_sink_candidates": True,
                 "runtime_claims": False,
+            },
+            "isolated_dynamic_analysis": {
+                "available": sandbox.enabled,
+                "ready": sandbox.ready,
+                "execution_permitted": sandbox.execution_permitted,
+                "adapter_version": sandbox.adapter_version,
+                "network_mode": sandbox.network_mode,
+                "instrumentation_mode": sandbox.instrumentation_mode,
+                "observed_runtime_only": True,
+                "blockers": sandbox.blockers,
             },
         },
         privacy_mode={

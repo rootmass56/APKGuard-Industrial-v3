@@ -390,7 +390,7 @@ class ScanJobExecutor:
                 size_bytes=artifact.size_bytes,
                 zip_entry_count=artifact.zip_entry_count,
                 total_uncompressed_bytes=artifact.total_uncompressed_bytes,
-                execution_mode=f"asynchronous_{job.execution_mode}_phase3",
+                execution_mode=f"asynchronous_{job.execution_mode}_phase4",
             )
             try:
                 result = self.runner.run(

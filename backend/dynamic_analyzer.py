@@ -1,17 +1,16 @@
-"""Observed-only dynamic-analysis boundary for APKGuard Sprint 0.
+"""Compatibility boundary for APKGuard dynamic analysis.
 
-Direct ADB/Frida execution from the API host has been intentionally disabled.
-The industrial target will use a separately isolated Android sandbox worker with
-controlled egress, immutable event capture, and explicit authorization.
+Phase 4 routes runtime execution through ``app.dynamic_analysis`` on a dedicated
+Redis-backed worker. This legacy module remains importable for older callers but
+never starts ADB, the Android Emulator, or Frida directly.
 """
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from typing import Any
 
-DYNAMIC_ADAPTER_VERSION = "2.1.0-sprint0-sec1"
+DYNAMIC_ADAPTER_VERSION = "apkguard-isolated-android/4.0.0-phase4"
 
 
 def _utc_now() -> str:
@@ -19,12 +18,12 @@ def _utc_now() -> str:
 
 
 def check_frida_available() -> bool:
-    """Compatibility function: direct host instrumentation is disabled."""
+    """Compatibility function; use the Phase 4 capabilities endpoint instead."""
     return False
 
 
 def run_frida_capture(package_name: str, duration: int = 15) -> None:
-    """Compatibility function retained until an isolated sandbox adapter exists."""
+    """Direct host instrumentation is intentionally prohibited."""
     del package_name, duration
     return None
 
@@ -32,9 +31,9 @@ def run_frida_capture(package_name: str, duration: int = 15) -> None:
 def not_executed_result(reason: str, package_name: str | None = None) -> dict[str, Any]:
     return {
         "status": "not_executed",
-        "stage_status": "UNAVAILABLE",
+        "stage_status": "NOT_EXECUTED",
         "dynamic_available": False,
-        "analysis_method": "isolated_sandbox_required",
+        "analysis_method": "phase4_dedicated_worker_required",
         "adapter_version": DYNAMIC_ADAPTER_VERSION,
         "package_name": package_name,
         "observed_events": [],
@@ -48,10 +47,11 @@ def not_executed_result(reason: str, package_name: str | None = None) -> dict[st
         "completed_at": _utc_now(),
         "summary": reason,
         "limitations": [
-            "No runtime behaviour was observed for this scan.",
-            "Direct ADB/Frida access from the API process is disabled for safety.",
-            "Static indicators and inferences are reported separately and never treated as runtime evidence.",
+            "No runtime behaviour was observed for this compatibility call.",
+            "Direct ADB, emulator, and Frida execution from the API process is disabled.",
+            "Use the Phase 4 Redis-backed dedicated sandbox worker and policy gate.",
         ],
+        "cleanup_confirmed": True,
     }
 
 
@@ -60,29 +60,9 @@ def run_dynamic_analysis(
     package_name: str | None = None,
     analysis: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return an honest unavailable result until the isolated sandbox is deployed."""
+    """Return an honest unavailable result for legacy direct callers."""
     del apk_path, analysis
-
-    configured_mode = os.getenv("APKGUARD_DYNAMIC_MODE", "disabled").strip().lower()
-    if not package_name:
-        return not_executed_result(
-            "Package name unavailable; isolated runtime analysis was not scheduled.",
-            package_name,
-        )
-
-    if configured_mode not in {"disabled", "isolated_sandbox"}:
-        return not_executed_result(
-            "Unsupported dynamic-analysis mode. Only the future isolated_sandbox adapter is permitted.",
-            package_name,
-        )
-
-    if configured_mode == "isolated_sandbox":
-        return not_executed_result(
-            "Isolated sandbox mode is selected, but no sandbox worker is connected in Sprint 0.",
-            package_name,
-        )
-
     return not_executed_result(
-        "Dynamic analysis is disabled until the isolated Android sandbox worker is implemented.",
+        "Legacy direct dynamic-analysis calls are disabled; use the Phase 4 sandbox service.",
         package_name,
     )

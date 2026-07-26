@@ -1,22 +1,30 @@
 $ErrorActionPreference = "Stop"
-$root = Split-Path -Parent $PSScriptRoot
-$destination = "D:\projects\APKGuard-checkpoints\APKGuard-Phase3-complete.zip"
-New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-Push-Location (Split-Path -Parent $root)
-tar -a -c -f $destination `
-    --exclude="APKGuard-Ai-working/.git" `
-    --exclude="APKGuard-Ai-working/backend/.venv" `
-    --exclude="APKGuard-Ai-working/backend/.env" `
-    --exclude="*/__pycache__" `
-    --exclude="*.pyc" `
-    --exclude="*/.pytest_cache" `
-    --exclude="*/.ruff_cache" `
-    --exclude="APKGuard-Ai-working/backend/cache" `
-    --exclude="APKGuard-Ai-working/backend/data" `
-    --exclude="APKGuard-Ai-working/backend/quarantine" `
-    --exclude="APKGuard-Ai-working/frontend/node_modules" `
-    --exclude="APKGuard-Ai-working/frontend/dist" `
-    --exclude="APKGuard-Ai-working/frontend/.env" `
-    "APKGuard-Ai-working"
-Pop-Location
-Get-Item $destination | Select-Object Name, Length, LastWriteTime
+Set-StrictMode -Version Latest
+
+$Root = Split-Path -Parent $PSScriptRoot
+$Destination = "D:\projects\APKGuard-checkpoints\APKGuard-Phase4-complete.zip"
+New-Item -ItemType Directory -Path (Split-Path -Parent $Destination) -Force | Out-Null
+
+$Status = git -C $Root status --porcelain
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to read repository status."
+}
+if ($Status) {
+    throw "Create release checkpoints only from a clean committed tree."
+}
+
+if (Test-Path $Destination) {
+    Remove-Item $Destination -Force
+}
+
+git -C $Root archive `
+    --format=zip `
+    --prefix=APKGuard-Ai-working/ `
+    --output=$Destination `
+    HEAD
+
+if ($LASTEXITCODE -ne 0) {
+    throw "git archive failed with exit code $LASTEXITCODE"
+}
+
+Get-Item $Destination | Select-Object Name, Length, LastWriteTime

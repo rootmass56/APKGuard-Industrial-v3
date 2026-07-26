@@ -12,7 +12,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks: [apkguard_internal]
+    networks:
+      - apkguard_internal
 
   redis:
     image: redis:7.4-alpine
@@ -24,56 +25,90 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
-    networks: [apkguard_internal]
+    networks:
+      - apkguard_internal
 
   api:
-    build: ./backend
+    build:
+      context: ./backend
     environment: &backend_environment
       APKGUARD_ENVIRONMENT: docker-development
+
       APKGUARD_DATABASE_URL: postgresql+psycopg://apkguard:${POSTGRES_PASSWORD:-change-me-development-only}@postgres:5432/apkguard
       APKGUARD_AUTO_CREATE_DATABASE: "false"
+
       APKGUARD_QUEUE_BACKEND: redis
       APKGUARD_REDIS_URL: redis://redis:6379/0
+      APKGUARD_REDIS_QUEUE: apkguard:scan-jobs
+
       APKGUARD_QUARANTINE_DIR: /app/data/quarantine
       APKGUARD_ANALYSIS_ISOLATION: subprocess
+
       APKGUARD_PRIVACY_MODE: local_only
       APKGUARD_ALLOW_VT_UPLOAD: "false"
+
+      # Phase 4 remains fail-closed inside Docker.
+      # The Windows Android emulator is not directly available inside
+      # these Linux containers.
+      APKGUARD_DYNAMIC_MODE: disabled
+      APKGUARD_SANDBOX_ENABLED: "false"
+      APKGUARD_SANDBOX_ACKNOWLEDGE_ISOLATION_RISK: "false"
+      APKGUARD_SANDBOX_DEDICATED_HOST: "false"
+      APKGUARD_SANDBOX_HOST_EGRESS_BLOCKED: "false"
+      APKGUARD_SANDBOX_ALLOW_ADB_ROOT: "false"
+
     volumes:
       - quarantine_data:/app/data/quarantine
     ports:
-      - "8000:8000"
+      - "18000:8000"
     depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')",
+        ]
       interval: 10s
       timeout: 5s
       retries: 20
-    networks: [apkguard_internal]
+    networks:
+      - apkguard_internal
 
   worker:
-    build: ./backend
+    build:
+      context: ./backend
     command: ["python", "-m", "app.worker"]
     environment: *backend_environment
     volumes:
       - quarantine_data:/app/data/quarantine
     depends_on:
-      postgres: {condition: service_healthy}
-      redis: {condition: service_healthy}
-      api: {condition: service_healthy}
-    networks: [apkguard_internal]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - apkguard_internal
 
   frontend:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://localhost:8000/api/v1
+        VITE_API_URL: http://127.0.0.1:18000/api/v1
     ports:
       - "5173:80"
     depends_on:
-      api: {condition: service_healthy}
-    networks: [apkguard_internal]
+      api:
+        condition: service_healthy
+    networks:
+      - apkguard_internal
 
 networks:
   apkguard_internal:

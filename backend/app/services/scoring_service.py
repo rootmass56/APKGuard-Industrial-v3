@@ -10,7 +10,7 @@ from app.schemas.common import Severity
 from app.schemas.evidence import EvidenceRecord
 from app.schemas.scan import ScoreComponent, VersionedScoreResult
 
-SCORING_POLICY_VERSION = "apkguard-risk-policy/2.0.0-phase3"
+SCORING_POLICY_VERSION = "apkguard-risk-policy/3.0.0-phase4"
 _MAX_POINTS = {
     "Dangerous Permissions": 30,
     "Suspicious API Calls": 25,
@@ -93,7 +93,7 @@ def calculate_versioned_score(
                 points=advanced_adjustment,
                 max_points=20,
                 detail=(
-                    f"Conservative Phase 3 adjustment derived from {len(advanced_records)} advanced deterministic "
+                    f"Conservative Phase 4 adjustment derived from {len(advanced_records)} advanced deterministic "
                     "evidence records; duplicate legacy categories are bounded by a 20-point cap."
                 ),
                 evidence_ids=[record.evidence_id for record in advanced_records],

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import multiprocessing
 import queue
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from typing import Callable
 
 from app.schemas.scan import ScanResponse
 from app.services.upload_service import UploadArtifact
+
+log = logging.getLogger("apkguard.analysis_runner")
 
 
 class AnalysisTimedOutError(TimeoutError):
@@ -57,6 +60,18 @@ def _run_analysis_child(request: AnalysisRequest, output_queue) -> None:
         output_queue.put({"ok": True, "result": result.model_dump(mode="json")})
     except Exception as exc:
         output_queue.put({"ok": False, "error_type": type(exc).__name__, "message": str(exc)})
+
+
+def _recover_dynamic_session(scan_id: str) -> None:
+    """Best-effort emulator teardown after forcibly stopping an analysis child."""
+    try:
+        from app.dependencies import get_dynamic_analysis_service
+
+        get_dynamic_analysis_service().recover_scan_session(scan_id)
+    except Exception as exc:
+        # The scan job state still records cancellation/timeout; stale-session
+        # recovery on worker startup is the second cleanup boundary.
+        log.warning("Immediate sandbox recovery failed scan_id=%s: %s", scan_id, exc)
 
 
 class InlineAnalysisRunner:
@@ -119,10 +134,12 @@ class SubprocessAnalysisRunner:
                 if cancel_check():
                     process.terminate()
                     process.join(timeout=5)
+                    _recover_dynamic_session(request.scan_id)
                     raise AnalysisCancelledError("Analysis subprocess terminated after cancellation request.")
                 if monotonic() >= deadline:
                     process.terminate()
                     process.join(timeout=5)
+                    _recover_dynamic_session(request.scan_id)
                     raise AnalysisTimedOutError(f"Analysis exceeded {timeout_seconds} seconds.")
                 heartbeat()
                 try:

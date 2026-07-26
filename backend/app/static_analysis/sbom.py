@@ -48,7 +48,7 @@ def build_sbom(
         "serialNumber": f"urn:uuid:{serial}",
         "version": 1,
         "metadata": {
-            "tools": {"components": [{"type": "application", "name": "APKGuard", "version": "3.2.0-phase3"}]},
+            "tools": {"components": [{"type": "application", "name": "APKGuard", "version": "4.0.0-phase4"}]},
             "component": {
                 "type": "application",
                 "name": package_name or filename,

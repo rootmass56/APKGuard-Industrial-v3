@@ -16,8 +16,8 @@ def test_versioned_health_and_legacy_compatibility():
 
     assert versioned.status_code == 200
     assert legacy.status_code == 200
-    assert versioned.json()["version"] == "3.2.0-phase3"
-    assert versioned.json()["schema_version"] == "1.2"
+    assert versioned.json()["version"] == "4.0.0-phase4"
+    assert versioned.json()["schema_version"] == "1.3"
     assert legacy.json()["api_version"] == "v1"
 
 

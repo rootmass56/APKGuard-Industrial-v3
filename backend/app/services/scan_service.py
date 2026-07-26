@@ -35,9 +35,9 @@ from app.services.scoring_service import SCORING_POLICY_VERSION, calculate_versi
 from app.services.upload_service import UploadArtifact
 
 log = logging.getLogger("apkguard.scan_service")
-STATIC_ANALYZER_VERSION = "apkguard-static-analyzer/3.2.0-phase3"
+STATIC_ANALYZER_VERSION = "apkguard-static-analyzer/4.0.0-phase4"
 BEHAVIOUR_ANALYZER_VERSION = "static-behaviour-inference/1.0.0"
-ORCHESTRATOR_VERSION = "scan-orchestrator/1.0.0"
+ORCHESTRATOR_VERSION = "scan-orchestrator/2.0.0-phase4"
 
 
 def utc_now() -> datetime:
@@ -88,11 +88,13 @@ class ScanService:
         capabilities: CapabilityRegistry,
         cache: CacheRepository,
         history: HistoryRepository,
+        dynamic_service=None,
     ) -> None:
         self.settings = settings
         self.capabilities = capabilities
         self.cache = cache
         self.history = history
+        self.dynamic_service = dynamic_service
         self.virustotal = VirusTotalHashClient(settings)
 
     def analyze(
@@ -101,7 +103,7 @@ class ScanService:
         request_id: str,
         *,
         scan_id: str | None = None,
-        execution_mode: str = "synchronous_compatibility_phase3",
+        execution_mode: str = "synchronous_compatibility_phase4",
         allow_cache: bool = True,
         record_legacy_history: bool = True,
     ) -> ScanResponse:
@@ -109,7 +111,7 @@ class ScanService:
         if cached:
             cached["cache_hit"] = True
             cached["request_id"] = request_id
-            cached["integrity_note"] = "Phase 3 compatibility result retrieved from the versioned local cache."
+            cached["integrity_note"] = "Phase 4 compatibility result retrieved from the versioned local cache."
             return ScanResponse.model_validate(cached)
 
         scan_id = scan_id or str(uuid4())
@@ -218,23 +220,28 @@ class ScanService:
             "dynamic_risk_score": 0,
             "summary": "Dynamic analysis is unavailable until an isolated sandbox worker is connected.",
         }
-        if self.capabilities.dynamic_analysis.available and self.capabilities.dynamic_analysis.function:
+        if self.dynamic_service is not None:
             try:
-                dynamic = self.capabilities.dynamic_analysis.function(
+                dynamic = self.dynamic_service.run(
                     str(artifact.temporary_path),
                     package_name,
+                    scan_id=scan_id,
                     analysis=analysis,
                 )
             except Exception as exc:
                 partial_failure = True
                 dynamic["status"] = "failed"
-                dynamic["summary"] = "Dynamic adapter failed before execution."
-                log.warning("Dynamic adapter failed: %s", exc)
-        dynamic_status = (
-            StageStatus.SUCCEEDED
-            if dynamic.get("dynamic_available")
-            else StageStatus.NOT_EXECUTED
-        )
+                dynamic["stage_status"] = "FAILED"
+                dynamic["summary"] = "The isolated sandbox adapter failed before evidence normalization."
+                dynamic["blockers"] = [type(exc).__name__]
+                log.warning("Dynamic sandbox adapter failed: %s", exc)
+        dynamic_stage_status = str(dynamic.get("stage_status", "NOT_EXECUTED")).upper()
+        dynamic_status = {
+            "SUCCEEDED": StageStatus.SUCCEEDED,
+            "PARTIAL": StageStatus.PARTIAL,
+            "FAILED": StageStatus.FAILED,
+            "NOT_EXECUTED": StageStatus.NOT_EXECUTED,
+        }.get(dynamic_stage_status, StageStatus.NOT_EXECUTED)
         _stage(
             stages,
             name="dynamic_analysis",
@@ -511,7 +518,7 @@ class ScanService:
             risk_score=score.final_score,
             severity=score.severity,
             result_digest=result_digest,
-            result_digest_scope="analysis_core_v2_phase3",
+            result_digest_scope="analysis_core_v3_phase4",
             execution_mode=execution_mode,
             analyzer_versions=analyzer_versions,
             stages=stages,
