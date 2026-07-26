@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { CircularProgressbar, buildStyles } from "react-circular-progressbar";
 import "react-circular-progressbar/dist/styles.css";
 import {
@@ -18,6 +18,34 @@ const TERMINAL_JOB_STATES=new Set(["COMPLETED","PARTIAL","FAILED","CANCELLED","T
 const stageFromJob=(job)=>{const state=(job?.state||"").toUpperCase();if(["CREATED","VALIDATING","QUARANTINED"].includes(state))return 0;if(state==="QUEUED")return 1;if(["RUNNING","CANCEL_REQUESTED"].includes(state))return job?.current_stage==="persisting_result"?3:2;return 4;};
 const apiErrorMessage=async(response,fallback)=>{const payload=await response.json().catch(()=>null);return payload?.error?.message||payload?.detail||fallback;};
 const DANGEROUS=["CAMERA","RECORD_AUDIO","READ_CONTACTS","ACCESS_FINE_LOCATION","READ_SMS","PROCESS_OUTGOING_CALLS","SEND_SMS","READ_CALL_LOG","READ_PHONE_STATE","REQUEST_INSTALL_PACKAGES"];
+
+function SandboxCapabilityCard(){
+  const [capability,setCapability]=useState(null);
+  useEffect(()=>{
+    let active=true;
+    fetch(`${API}/dynamic-analysis/capabilities`)
+      .then(r=>r.ok?r.json():null)
+      .then(data=>{if(active)setCapability(data);})
+      .catch(()=>{if(active)setCapability(null);});
+    return()=>{active=false;};
+  },[]);
+  if(!capability)return null;
+  const ready=capability.ready;
+  const enabled=capability.enabled;
+  const color=ready?"var(--c-low)":enabled?"var(--c-medium)":"var(--fg-dim)";
+  const label=ready?"SANDBOX READY":enabled?"SANDBOX BLOCKED":"SANDBOX DISABLED";
+  return(
+    <div className="panel" style={{marginTop:14,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,borderColor:`${color}55`}}>
+      <Activity size={16} color={color}/><div style={{minWidth:0,flex:1}}>
+        <div style={{fontSize:11,fontWeight:800,color,letterSpacing:"0.08em"}}>{label}</div>
+        <div style={{fontSize:10,color:"var(--fg-dim)",marginTop:2}}>
+          {ready?`Disposable ${capability.network_mode} emulator | ${capability.instrumentation_mode}`:(capability.blockers?.[0]||"Runtime evidence is not available in the current deployment.")}
+        </div>
+      </div>
+      <span style={{fontSize:9,color:"var(--fg-dim)",fontFamily:"monospace"}}>Phase 4</span>
+    </div>
+  );
+}
 
 function UploadPage({onResults}){
   const [dragging,setDragging]=useState(false);
@@ -64,7 +92,7 @@ function UploadPage({onResults}){
       setErrMsg("Cancellation requested. The worker will stop at the next safe checkpoint.");
     }catch(e){setErrMsg(e.message);}
   };
-  const FEATURES=[[Search,"Static Analysis","DEX, manifest, resources"],[Cpu,"Optional AI Summary","Disabled unless configured"],[Eye,"MITRE ATT&CK","Evidence-based mapping"],[Globe,"Hash Reputation","No file upload by default"],[Lock,"Permission Audit","Dangerous perm detection"],[BarChart2,"Risk Scoring","Explainable weighted score"]];
+  const FEATURES=[[Search,"Static Analysis","DEX, manifest, resources"],[Activity,"Isolated Runtime","Observed only when worker ready"],[Cpu,"Optional AI Summary","Disabled unless configured"],[Eye,"MITRE ATT&CK","Evidence-based mapping"],[Globe,"Hash Reputation","No file upload by default"],[Lock,"Permission Audit","Dangerous perm detection"],[BarChart2,"Risk Scoring","Explainable weighted score"]];
   const STATS=[["Evidence","Based"],["Hash-only","VT Mode"],["AI","Optional"],["Open","Source"]];
   return(
     <div className="upload-root">
@@ -76,6 +104,7 @@ function UploadPage({onResults}){
           <div><h1 className="logo-title">APKGuard <span className="logo-ai">AI</span></h1><p className="logo-sub">Android Package Security Intelligence Platform</p></div>
         </div>
         <div className="stats-row">{STATS.map(([val,label])=><div key={label} className="stat-pill"><span className="stat-pill-val">{val}</span><span className="stat-pill-lbl">{label}</span></div>)}</div>
+        <SandboxCapabilityCard/>
         {status!=="scanning"?(
           <div className={`dropzone ${dragging?"dragging":""} ${status==="error"?"errored":""}`} onDragOver={(e)=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)} onDrop={onDrop} onClick={()=>inputRef.current?.click()} role="button" tabIndex={0} aria-label="Upload APK" onKeyDown={(e)=>e.key==="Enter"&&inputRef.current?.click()}>
             <input ref={inputRef} type="file" accept=".apk" className="hidden-input" onChange={(e)=>handleFile(e.target.files[0])}/>
@@ -274,7 +303,23 @@ function SmaliPanel({smali}){
 }
 
 function DynamicPanel({dynamic}){
-  if(!dynamic||!dynamic.dynamic_available)return null;
+  if(!dynamic)return null;
+  if(!dynamic.dynamic_available){
+    const blockers=dynamic.blockers||[];
+    const limitations=dynamic.limitations||[];
+    return(
+      <div className="panel" style={{marginTop:16}}>
+        <div className="panel-head"><Activity size={16}/>Dynamic Analysis
+          <span className="ai-badge" style={{background:"var(--fg-dim)18",color:"var(--fg-dim)",borderColor:"var(--border)"}}>NOT EXECUTED</span>
+        </div>
+        <div style={{padding:"12px 16px",fontSize:12,color:"var(--fg-dim)",lineHeight:1.6}}>
+          <div style={{color:"var(--fg)",marginBottom:6}}>{dynamic.summary||"No verified runtime evidence was captured."}</div>
+          {blockers.map((item,i)=><div key={`b-${i}`} style={{color:"var(--c-medium)"}}>• {item}</div>)}
+          {limitations.map((item,i)=><div key={`l-${i}`}>• {item}</div>)}
+        </div>
+      </div>
+    );
+  }
   const apis=dynamic.api_calls_intercepted||[];
   const network=dynamic.network_calls||[];
   const files=dynamic.file_operations||[];
@@ -286,10 +331,16 @@ function DynamicPanel({dynamic}){
     <div className="panel" style={{marginTop:16}}>
       <div className="panel-head"><Zap size={16}/>Dynamic Analysis
         <span className="panel-count">{dynamic.total_events} events</span>
-        {dynamic.analysis_method==="frida_live_instrumentation" ? <span className="ai-badge" style={{background:"var(--c-critical)22",color:"var(--c-critical)",borderColor:"var(--c-critical)44"}}>LIVE FRIDA</span> : <span className="ai-badge" style={{background:"var(--c-medium)22",color:"var(--c-medium)",borderColor:"var(--c-medium)44"}}>OBSERVED SANDBOX</span>}
+        {dynamic.analysis_method?.includes("frida") ? <span className="ai-badge" style={{background:"var(--c-critical)22",color:"var(--c-critical)",borderColor:"var(--c-critical)44"}}>EMULATOR + FRIDA</span> : <span className="ai-badge" style={{background:"var(--c-medium)22",color:"var(--c-medium)",borderColor:"var(--c-medium)44"}}>OBSERVED SANDBOX</span>}
         <span style={{marginLeft:"auto",fontSize:12,color:riskColor,fontWeight:800,background:`${riskColor}22`,padding:"2px 10px",borderRadius:4,border:`1px solid ${riskColor}44`}}>RISK: {riskScore}/100</span>
       </div>
       <div style={{padding:"10px 16px 4px",fontSize:12,color:"var(--fg-dim)"}}>{dynamic.summary}</div>
+      <div style={{padding:"4px 16px 10px",display:"flex",gap:6,flexWrap:"wrap"}}>
+        {dynamic.session_id&&<span className="meta-chip">Session {dynamic.session_id.slice(0,8)}</span>}
+        {dynamic.emulator_serial&&<span className="meta-chip">{dynamic.emulator_serial}</span>}
+        {dynamic.network_mode&&<span className="meta-chip">Network: {dynamic.network_mode}</span>}
+        <span className="meta-chip">Cleanup: {dynamic.cleanup_confirmed?"confirmed":"unconfirmed"}</span>
+      </div>
       <div style={{display:"flex",gap:12,padding:"8px 16px 12px",borderBottom:"1px solid var(--border)"}}>
         {[["API Calls",apis.length,"var(--c-critical)"],["Network",network.length,"var(--c-high)"],["File Ops",files.length,"var(--c-medium)"],["Crypto",crypto.length,"var(--c-low)"]].map(([label,count,color])=>(
           <div key={label} style={{flex:1,padding:"8px 12px",borderRadius:6,background:`${color}11`,border:`1px solid ${color}33`,textAlign:"center"}}>
@@ -351,6 +402,12 @@ function DynamicPanel({dynamic}){
                 <Lock size={14} color="var(--c-low)" opacity={0.5}/>
               </div>
             ))}
+          </div>
+        )}
+        {dynamic.artifacts?.length>0&&(
+          <div>
+            <div style={{fontSize:11,fontWeight:700,color:"var(--fg-dim)",letterSpacing:"0.1em",marginBottom:8,textTransform:"uppercase"}}>Sandbox Artifacts ({dynamic.artifacts.length})</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{dynamic.artifacts.map((a,i)=><span key={i} className="meta-chip" title={a.sha256}>{a.artifact_type}: {a.filename}</span>)}</div>
           </div>
         )}
       </div>
@@ -546,7 +603,7 @@ function ResultsDashboard({data,onReset}){
           <div style={{display:"flex",gap:5,justifyContent:"center",marginTop:10,flexWrap:"wrap",width:"100%",padding:"0 4px"}}>
             <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"var(--c-high)22",color:"var(--c-high)",border:"1px solid var(--c-high)44",whiteSpace:"nowrap"}}>S:{staticScore}</span>
             {dynamicScore>0&&<span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"var(--c-critical)22",color:"var(--c-critical)",border:"1px solid var(--c-critical)44",whiteSpace:"nowrap"}}>D:{dynamicScore}</span>}
-            <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"var(--panel-bg)",color:"var(--fg-dim)",border:"1px solid var(--border)",whiteSpace:"nowrap"}}>{scoringMode==="static_only"?"Static":"frida_live"===scoringMode?"Frida":"Sim"}</span>
+            <span style={{fontSize:9,padding:"2px 6px",borderRadius:4,background:"var(--panel-bg)",color:"var(--fg-dim)",border:"1px solid var(--border)",whiteSpace:"nowrap"}}>{scoringMode==="static_dynamic_observed"?"Observed":scoringMode.startsWith("static_only")?"Static":scoringMode}</span>
           </div>
         </div>
         <div className="stat-card"><div className="stat-card-head"><Activity size={15}/>Finding Summary</div><StatBar counts={counts}/><div className="meta-row">{[[Wifi,"Network"],[Database,"Storage"],[Lock,"Crypto"],[Globe,"Privacy"]].map(([Icon,lbl])=><div key={lbl} className="meta-chip"><Icon size={12}/>{lbl}</div>)}</div></div>

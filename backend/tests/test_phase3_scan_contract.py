@@ -84,8 +84,8 @@ def test_scan_response_exposes_phase3_contract(monkeypatch, tmp_path: Path):
         total_uncompressed_bytes=10,
     )
     response = service.analyze(artifact, "phase3-request")
-    assert response.schema_version == "1.2"
+    assert response.schema_version == "1.3"
     assert response.signing["detected_schemes"] == ["v2"]
     assert response.sbom["bomFormat"] == "CycloneDX"
-    assert response.score.policy_version == "apkguard-risk-policy/2.0.0-phase3"
+    assert response.score.policy_version == "apkguard-risk-policy/3.0.0-phase4"
     assert any(stage.stage == "advanced_static_analysis" for stage in response.stages)

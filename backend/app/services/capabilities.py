@@ -48,7 +48,7 @@ class CapabilityRegistry:
     def health(self) -> dict[str, Any]:
         return {
             "dynamic_analysis_module": self.dynamic_analysis.available,
-            "dynamic_execution_status": "disabled_until_isolated_sandbox",
+            "dynamic_execution_status": "controlled_by_phase4_sandbox_policy",
             "ml_classifier_module": self.ml_classifier.available,
             "smali_module": self.smali_explanation.available,
             "threat_feeds_module": self.threat_feeds.available and self.threat_scan.available,

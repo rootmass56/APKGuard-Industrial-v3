@@ -8,7 +8,7 @@ from typing import Any
 from app.schemas.common import EvidenceType, Severity
 from app.schemas.evidence import EvidenceLocation, EvidenceRecord, Finding
 
-EVIDENCE_FACTORY_VERSION = "evidence-factory/2.0.0-phase3"
+EVIDENCE_FACTORY_VERSION = "evidence-factory/3.0.0-phase4"
 
 
 def stable_id(prefix: str, *parts: Any) -> str:
@@ -250,7 +250,13 @@ def build_evidence_and_findings(
                 source="Isolated Android sandbox",
                 value=event,
                 confidence=1.0,
-                metadata={"category": "runtime"},
+                metadata={
+                    "category": "runtime",
+                    "observation_id": event.get("observation_id"),
+                    "session_id": event.get("session_id"),
+                    "event_category": event.get("category"),
+                    "evidence_digest": event.get("evidence_digest"),
+                },
             )
 
     return evidence, findings

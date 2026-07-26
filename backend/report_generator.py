@@ -691,8 +691,10 @@ def generate_pdf_report(data: dict[str, Any]) -> str:
                 continue
             rows.append(
                 [
-                    event.get("timestamp", ""),
-                    event.get("api")
+                    event.get("observed_at") or event.get("timestamp") or "",
+                    event.get("title")
+                    or event.get("api")
+                    or event.get("event_type")
                     or event.get("event")
                     or event.get("name")
                     or "",
@@ -701,7 +703,7 @@ def generate_pdf_report(data: dict[str, Any]) -> str:
                     or "",
                     event.get("evidence_source")
                     or event.get("source")
-                    or "runtime instrumentation",
+                    or "isolated sandbox",
                 ]
             )
         story.extend(
@@ -714,6 +716,29 @@ def generate_pdf_report(data: dict[str, Any]) -> str:
                 Spacer(1, 8),
             ]
         )
+        sandbox_rows = [
+            ["Session", dynamic.get("session_id") or "Unavailable"],
+            ["AVD", dynamic.get("avd_name") or "Unavailable"],
+            ["Emulator", dynamic.get("emulator_serial") or "Unavailable"],
+            ["Network policy", dynamic.get("network_mode") or "Unavailable"],
+            ["Instrumentation", dynamic.get("instrumentation_mode") or "Unavailable"],
+            ["Cleanup confirmed", "Yes" if dynamic.get("cleanup_confirmed") else "No"],
+        ]
+        story.append(_build_table(sandbox_rows, [4.2 * cm, 11.8 * cm], font_size=8))
+        artifacts = dynamic.get("artifacts") or []
+        if artifacts:
+            story.append(Spacer(1, 6))
+            story.append(Paragraph("Sandbox Artifacts", subheading_style))
+            artifact_rows = [["Type", "File", "SHA-256"]]
+            for artifact in artifacts[:20]:
+                artifact_rows.append(
+                    [
+                        artifact.get("artifact_type", ""),
+                        artifact.get("filename", ""),
+                        artifact.get("sha256", "")[:24],
+                    ]
+                )
+            story.append(_build_table(artifact_rows, [3.2 * cm, 6.3 * cm, 6.5 * cm], font_size=7.2))
     else:
         story.append(Paragraph("Dynamic Analysis", heading_style))
         reason = (

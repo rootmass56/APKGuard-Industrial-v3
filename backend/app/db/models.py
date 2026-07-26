@@ -66,6 +66,7 @@ class ScanJobModel(Base):
         back_populates="job", cascade="all, delete-orphan", order_by="ScanEventModel.sequence"
     )
     result: Mapped["ScanResultModel | None"] = relationship(back_populates="job", uselist=False)
+    sandbox_session: Mapped["SandboxSessionModel | None"] = relationship(back_populates="job", uselist=False)
 
 
 class ScanEventModel(Base):
@@ -105,3 +106,61 @@ class ScanResultModel(Base):
 @event.listens_for(ScanResultModel, "before_update")
 def reject_scan_result_update(_mapper, _connection, _target) -> None:
     raise RuntimeError("Scan results are immutable; create a new scan result version instead of updating.")
+
+
+class SandboxSessionModel(Base):
+    __tablename__ = "sandbox_sessions"
+    __table_args__ = (
+        Index("ix_sandbox_sessions_state_updated", "state", "updated_at"),
+        UniqueConstraint("scan_id", name="uq_sandbox_session_scan_id"),
+    )
+
+    session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    scan_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("scan_jobs.scan_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    state: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    worker_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    avd_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    emulator_serial: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    network_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    instrumentation_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    policy_digest: Mapped[str] = mapped_column(String(64), nullable=False)
+    artifact_directory: Mapped[str] = mapped_column(Text, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    job: Mapped[ScanJobModel] = relationship(back_populates="sandbox_session")
+    events: Mapped[list["SandboxEventModel"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan", order_by="SandboxEventModel.sequence"
+    )
+
+
+class SandboxEventModel(Base):
+    __tablename__ = "sandbox_events"
+    __table_args__ = (UniqueConstraint("session_id", "sequence", name="uq_sandbox_event_sequence"),)
+
+    event_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sandbox_sessions.session_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source: Mapped[str] = mapped_column(String(256), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    evidence_digest: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    session: Mapped[SandboxSessionModel] = relationship(back_populates="events")
+
+
+@event.listens_for(SandboxEventModel, "before_update")
+def reject_sandbox_event_update(_mapper, _connection, _target) -> None:
+    raise RuntimeError("Sandbox events are immutable observations and cannot be updated.")

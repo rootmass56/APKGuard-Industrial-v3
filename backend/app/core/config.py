@@ -62,15 +62,30 @@ def _analysis_isolation_mode() -> str:
     return configured if configured in {"inline", "subprocess"} else "inline"
 
 
+def _dynamic_mode() -> str:
+    configured = os.getenv("APKGUARD_DYNAMIC_MODE", "disabled").strip().lower()
+    return configured if configured in {"disabled", "isolated_sandbox"} else "disabled"
+
+
+def _sandbox_network_mode() -> str:
+    configured = os.getenv("APKGUARD_SANDBOX_NETWORK_MODE", "offline").strip().lower()
+    return configured if configured in {"offline"} else "offline"
+
+
+def _sandbox_instrumentation_mode() -> str:
+    configured = os.getenv("APKGUARD_SANDBOX_INSTRUMENTATION", "logcat_only").strip().lower()
+    return configured if configured in {"logcat_only", "frida_optional", "frida_required"} else "logcat_only"
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     """Immutable application settings resolved from environment variables."""
 
     app_name: str = "APKGuard Industrial v3"
-    app_version: str = "3.2.0-phase3"
+    app_version: str = "4.0.0-phase4"
     api_version: str = "v1"
     api_prefix: str = "/api/v1"
-    schema_version: str = "1.2"
+    schema_version: str = "1.3"
     environment: str = os.getenv("APKGUARD_ENVIRONMENT", "development")
     log_level: str = os.getenv("APKGUARD_LOG_LEVEL", "INFO").upper()
     log_format: str = os.getenv("APKGUARD_LOG_FORMAT", "text").lower()
@@ -85,7 +100,7 @@ class Settings:
     history_limit: int = _env_int("APKGUARD_HISTORY_LIMIT", 50, 1, 10000)
     virustotal_upload_enabled: bool = _env_bool("APKGUARD_ALLOW_VT_UPLOAD", False)
     privacy_mode: str = _privacy_mode()
-    dynamic_mode: str = os.getenv("APKGUARD_DYNAMIC_MODE", "disabled").strip().lower()
+    dynamic_mode: str = _dynamic_mode()
 
     cors_origins: tuple[str, ...] = _env_csv(
         "APKGUARD_CORS_ORIGINS",
@@ -118,6 +133,40 @@ class Settings:
     stale_job_seconds: int = _env_int("APKGUARD_STALE_JOB_SECONDS", 1800, 30, 86400)
     analysis_isolation_mode: str = _analysis_isolation_mode()
 
+    sandbox_enabled: bool = _env_bool("APKGUARD_SANDBOX_ENABLED", False)
+    sandbox_risk_acknowledged: bool = _env_bool("APKGUARD_SANDBOX_ACKNOWLEDGE_ISOLATION_RISK", False)
+    sandbox_dedicated_host: bool = _env_bool("APKGUARD_SANDBOX_DEDICATED_HOST", False)
+    sandbox_host_egress_blocked: bool = _env_bool("APKGUARD_SANDBOX_HOST_EGRESS_BLOCKED", False)
+    sandbox_avd_name: str = os.getenv("APKGUARD_SANDBOX_AVD_NAME", "").strip()
+    sandbox_snapshot_name: str = os.getenv("APKGUARD_SANDBOX_SNAPSHOT", "apkguard-clean").strip()
+    sandbox_network_mode: str = _sandbox_network_mode()
+    sandbox_instrumentation_mode: str = _sandbox_instrumentation_mode()
+    sandbox_adb_path: str = os.getenv("APKGUARD_SANDBOX_ADB_PATH", "adb").strip() or "adb"
+    sandbox_emulator_path: str = os.getenv("APKGUARD_SANDBOX_EMULATOR_PATH", "emulator").strip() or "emulator"
+    sandbox_frida_path: str = os.getenv("APKGUARD_SANDBOX_FRIDA_PATH", "frida").strip() or "frida"
+    sandbox_emulator_port: int = _env_int("APKGUARD_SANDBOX_EMULATOR_PORT", 5556, 5554, 5682)
+    sandbox_boot_timeout_seconds: int = _env_int("APKGUARD_SANDBOX_BOOT_TIMEOUT_SECONDS", 180, 30, 1200)
+    sandbox_execution_timeout_seconds: int = _env_int("APKGUARD_SANDBOX_EXECUTION_TIMEOUT_SECONDS", 240, 30, 1800)
+    sandbox_interaction_seconds: int = _env_int("APKGUARD_SANDBOX_INTERACTION_SECONDS", 20, 1, 300)
+    sandbox_monkey_events: int = _env_int("APKGUARD_SANDBOX_MONKEY_EVENTS", 50, 1, 5000)
+    sandbox_headless: bool = _env_bool("APKGUARD_SANDBOX_HEADLESS", True)
+    sandbox_capture_screenshot: bool = _env_bool("APKGUARD_SANDBOX_CAPTURE_SCREENSHOT", True)
+    sandbox_capture_logcat: bool = _env_bool("APKGUARD_SANDBOX_CAPTURE_LOGCAT", True)
+    sandbox_capture_network: bool = _env_bool("APKGUARD_SANDBOX_CAPTURE_NETWORK", True)
+    sandbox_capture_processes: bool = _env_bool("APKGUARD_SANDBOX_CAPTURE_PROCESSES", True)
+    sandbox_capture_filesystem_diff: bool = _env_bool("APKGUARD_SANDBOX_CAPTURE_FILESYSTEM_DIFF", True)
+    sandbox_allow_adb_root: bool = _env_bool("APKGUARD_SANDBOX_ALLOW_ADB_ROOT", False)
+    sandbox_worker_id: str = os.getenv("APKGUARD_SANDBOX_WORKER_ID", os.getenv("COMPUTERNAME", "sandbox-worker")).strip()
+    sandbox_workspace_dir: Path = Path(
+        os.getenv("APKGUARD_SANDBOX_WORKSPACE_DIR", str(BACKEND_ROOT / "data" / "sandbox_sessions"))
+    ).expanduser()
+    sandbox_artifact_retention_days: int = _env_int(
+        "APKGUARD_SANDBOX_ARTIFACT_RETENTION_DAYS", 7, 1, 365
+    )
+    sandbox_max_command_output_bytes: int = _env_int(
+        "APKGUARD_SANDBOX_MAX_COMMAND_OUTPUT_BYTES", 2_000_000, 10_000, 20_000_000
+    )
+
     vt_api_key: str = os.getenv("VT_API_KEY", "").strip()
     groq_api_key: str = os.getenv("GROQ_API_KEY", "").strip()
     siem_webhook_url: str = (
@@ -146,6 +195,11 @@ class Settings:
     def public_threat_feeds_allowed_by_policy(self) -> bool:
         return self.privacy_mode in {"hash_only", "cloud_enrichment", "private_enterprise"}
 
+    @property
+    def sandbox_serial(self) -> str:
+        port = self.sandbox_emulator_port if self.sandbox_emulator_port % 2 == 0 else self.sandbox_emulator_port + 1
+        return f"emulator-{port}"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
@@ -153,6 +207,7 @@ def get_settings() -> Settings:
     settings = Settings()
     settings.cache_dir.mkdir(parents=True, exist_ok=True)
     settings.quarantine_dir.mkdir(parents=True, exist_ok=True)
+    settings.sandbox_workspace_dir.mkdir(parents=True, exist_ok=True)
     if settings.history_enabled:
         settings.history_file.parent.mkdir(parents=True, exist_ok=True)
     return settings

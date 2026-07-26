@@ -2,7 +2,7 @@
 
 APKGuard is an evidence-driven Android APK security triage project. It is being rebuilt from a prototype into an industrial-grade platform for static inspection, optional runtime analysis, threat-intelligence enrichment, explainable scoring, and analyst reporting.
 
-> Current branch status: **Sprint 0 industrial baseline**. This is not yet a production malware sandbox or enterprise SOC product. The project now avoids known false claims and clearly separates observed evidence from inferred indicators.
+> Current release target: **Phase 4 isolated Android runtime-analysis architecture**. Dynamic execution remains fail-closed until a dedicated contained sandbox worker passes every policy and tool preflight gate.
 
 ## What APKGuard is building
 
@@ -37,7 +37,8 @@ APKGuard now follows these baseline rules:
 - Static behavioural inference with evidence labels.
 - Hash-only VirusTotal lookup when configured.
 - Optional Groq AI evidence summary when configured.
-- Optional Frida runtime capture when a compatible Android runtime is already available.
+- Fail-closed isolated Android Emulator adapter with timestamped runtime evidence when a dedicated contained worker is configured.
+- Optional Frida observation hooks; logcat and lifecycle collection remain available without Frida.
 - PDF report generation prototype.
 - URL scanner prototype.
 - Synthetic ML demonstration with clear validation warning.
@@ -98,7 +99,9 @@ npm run dev
 | `APKGUARD_ENABLE_HISTORY` | Local scan history | `true` |
 | `APKGUARD_MAX_UPLOAD_MB` | Upload size limit | `100` |
 | `APKGUARD_CORS_ORIGINS` | Allowed frontend origins | Local Vite origins |
-| `VITE_API_URL` | Frontend backend URL | `http://localhost:8000` |
+| `VITE_API_URL` | Frontend backend URL | `http://localhost:8000/api/v1` |
+| `APKGUARD_DYNAMIC_MODE` | Runtime analysis mode | `disabled` |
+| `APKGUARD_SANDBOX_ENABLED` | Dedicated sandbox worker gate | `false` |
 
 ## Verification
 
@@ -111,21 +114,23 @@ npm run build
 
 ## Known limitations
 
-- The dynamic sandbox is not yet a complete isolated Android emulator pipeline.
-- The ML benchmark is synthetic and not a real-world malware evaluation.
-- The report endpoint still accepts client-supplied data in Sprint 0.
-- Authentication, RBAC, audit logging, database persistence, and job queues are planned for later sprints.
-- Advanced static-analysis modules such as certificate analysis, exported-component analysis, taint analysis, and repackaging comparison are planned but not complete.
+- Dynamic execution requires a separately hardened Android sandbox host or VM; it is deliberately disabled in local/eager development.
+- Phase 4 supports offline runtime execution only. Host-level egress blocking is mandatory.
+- UI automation and optional Frida hooks do not guarantee complete runtime coverage.
+- The ML benchmark remains synthetic and advisory until the validated ML phase.
+- Authentication, RBAC, case management, and production observability are later phases.
 
 ## Roadmap
 
-1. **Sprint 0:** Truth, safety, dependency setup, and baseline verification.
-2. **Sprint 1:** Typed backend schemas, modular architecture, tests, and job model.
-3. **Sprint 2:** Advanced static-analysis checks and standards mapping.
-4. **Sprint 3:** Real dynamic Android sandbox and runtime timeline.
-5. **Sprint 4:** Threat-intelligence correlation, similarity graph, and repackaging detection.
-6. **Sprint 5:** Reproducible ML dataset and ablation study.
-7. **Sprint 6:** Enterprise workflow, reports from immutable scan IDs, SIEM/STIX integrations, Docker and CI/CD.
+1. **Sprint 0:** Secure and honest baseline.
+2. **Phase 1:** Versioned API and typed evidence contracts.
+3. **Phase 2:** Persistent jobs, quarantine, Redis/PostgreSQL adapters, and workers.
+4. **Phase 3:** Advanced deterministic static analysis and SBOM.
+5. **Phase 4:** Fail-closed isolated Android runtime analysis and observed-runtime evidence.
+6. **Phase 5:** Repackaging, similarity, and malware lineage.
+7. **Phase 6:** Validated machine learning and controlled AI.
+8. **Phase 7:** Enterprise workflow, authentication, DevSecOps, and observability.
+9. **Phase 8:** Research validation, final release, and submission.
 
 ## Ethical use
 
@@ -146,3 +151,8 @@ Persistent scan jobs, content-addressed quarantine, immutable results, real prog
 Version `3.2.0-phase3` adds deterministic signing metadata, manifest attack surface, network-security configuration,
 TLS/WebView and cryptography rules, dynamic-code indicators, secret redaction, native ELF metadata, SDK inventory,
 CycloneDX-style SBOM output, call-graph foundations, and explicitly limited source-to-sink candidates.
+
+
+## Phase 4 isolated runtime analysis
+
+Version `4.0.0-phase4` introduces a dedicated Android Emulator sandbox adapter, named clean-snapshot startup, allowlisted ADB process execution, offline guest controls, host-egress and dedicated-host policy gates, bounded UI exercise, logcat and filesystem evidence, optional Frida observation hooks, append-only runtime events, session recovery, runtime scoring, and analyst-facing capability/status APIs. The adapter reports `NOT_EXECUTED` unless the environment is explicitly ready.

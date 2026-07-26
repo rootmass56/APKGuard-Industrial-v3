@@ -102,11 +102,11 @@ def test_scan_service_builds_versioned_evidence_contract(monkeypatch, tmp_path: 
 
     response = service.analyze(artifact, "request-phase1")
 
-    assert response.schema_version == "1.2"
+    assert response.schema_version == "1.3"
     assert response.request_id == "request-phase1"
-    assert response.result_digest_scope == "analysis_core_v2_phase3"
+    assert response.result_digest_scope == "analysis_core_v3_phase4"
     assert len(response.result_digest) == 64
-    assert response.score.policy_version == "apkguard-risk-policy/2.0.0-phase3"
+    assert response.score.policy_version == "apkguard-risk-policy/3.0.0-phase4"
     assert response.dynamic["dynamic_available"] is False
     assert any(item.evidence_type == "STATICALLY_DETECTED" for item in response.evidence)
     assert any(item.evidence_type == "INFERRED_STATIC" for item in response.evidence)

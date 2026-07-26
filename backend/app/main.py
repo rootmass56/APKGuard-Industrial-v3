@@ -1,4 +1,4 @@
-"""FastAPI application factory for APKGuard Industrial v3 Phase 3."""
+"""FastAPI application factory for APKGuard Industrial v3 Phase 4."""
 
 from __future__ import annotations
 
@@ -44,9 +44,9 @@ def create_app() -> FastAPI:
         title=settings.app_name,
         version=settings.app_version,
         description=(
-            "Evidence-driven Android APK triage API. Phase 3 adds deterministic signing metadata, "
-            "manifest attack-surface analysis, network and WebView security checks, cryptography rules, "
-            "native and dependency inventory, SBOM output, call graphs, and source-to-sink candidates."
+            "Evidence-driven Android APK triage API. Phase 4 adds a fail-closed isolated Android "
+            "sandbox control plane, disposable emulator sessions, offline execution policy, bounded UI "
+            "exercise, optional Frida observation, timestamped runtime evidence, and immutable sandbox events."
         ),
         lifespan=lifespan,
         openapi_tags=[
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
             {"name": "Scan Jobs", "description": "Persistent asynchronous APK scan jobs."},
             {"name": "Scans", "description": "Synchronous compatibility analysis endpoint."},
             {"name": "Static Analysis", "description": "Versioned deterministic static-analysis metadata."},
+            {"name": "Dynamic Analysis", "description": "Isolated sandbox policy, capabilities, sessions, and events."},
             {"name": "History", "description": "Database-backed scan summaries."},
             {"name": "Integrations", "description": "Policy-controlled enrichment and exports."},
             {"name": "Reports", "description": "Immutable scan-ID and compatibility reports."},

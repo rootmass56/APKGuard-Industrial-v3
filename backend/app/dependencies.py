@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from app.core.config import get_settings
 from app.db.session import get_database
+from app.dynamic_analysis.service import DynamicAnalysisService
 from app.services.analysis_runner import InlineAnalysisRunner, SubprocessAnalysisRunner
 from app.services.capabilities import get_capabilities
 from app.services.job_queue import create_job_queue
@@ -13,6 +14,7 @@ from app.services.job_repository import ArtifactRepository, ImmutableResultRepos
 from app.services.job_service import ScanJobExecutor, ScanJobService
 from app.services.quarantine import QuarantineStorage
 from app.services.repositories import CacheRepository, HistoryRepository
+from app.services.sandbox_repository import SandboxRepository
 from app.services.scan_service import ScanService
 
 
@@ -29,12 +31,26 @@ def get_history_repository() -> HistoryRepository:
 
 
 @lru_cache(maxsize=1)
+def get_sandbox_repository() -> SandboxRepository:
+    return SandboxRepository(get_database())
+
+
+@lru_cache(maxsize=1)
+def get_dynamic_analysis_service() -> DynamicAnalysisService:
+    return DynamicAnalysisService(
+        settings=get_settings(),
+        repository=get_sandbox_repository(),
+    )
+
+
+@lru_cache(maxsize=1)
 def get_scan_service() -> ScanService:
     return ScanService(
         settings=get_settings(),
         capabilities=get_capabilities(),
         cache=get_cache_repository(),
         history=get_history_repository(),
+        dynamic_service=get_dynamic_analysis_service(),
     )
 
 
